@@ -7,15 +7,18 @@ interface MinimapState {
 	isPinned: boolean;
 }
 
-interface TerminalSnapshot {
+interface PaneSnapshot {
 	nodeId: string;
-	sessionId: string;
+	sessionId?: string;
 	imageData: string;
+	type: 'terminal' | 'webview';
+	url?: string;
+	title?: string;
 }
 
 interface LayoutUpdate {
 	layout: LayoutNode | null;
-	snapshots: TerminalSnapshot[];
+	snapshots: PaneSnapshot[];
 	aspectRatio?: number; // width / height of main container
 }
 

@@ -103,59 +103,81 @@
 		return [];
 	}
 
-	// Capture snapshots for minimap from terminal canvases
-	// Uses OffscreenAddon for reliable capture even when terminals are off-screen
+	// Capture snapshots for minimap from terminal canvases and webviews
+	// Uses OffscreenAddon for reliable terminal capture even when off-screen
 	async function captureSnapshots() {
 		const nodeIds = getAllNodeIds(layout.root);
-		const snapshots: { nodeId: string; sessionId: string; imageData: string }[] = [];
+		const webviews = getAllWebviews(layout);
+		const snapshots: { nodeId: string; sessionId?: string; imageData: string; type: 'terminal' | 'webview'; url?: string; title?: string }[] = [];
 
 		// Get minimap dimensions - capture at exactly the display size
-		// Small minimap = small capture (fast), large minimap = sharp capture
-		// If minimap matches app size, thumbnails will be full resolution
 		const minimapDims = minimapStore.getMinimapDimensions();
 		const targetWidth = minimapDims.width;
 		const targetHeight = minimapDims.height;
 
 		// Capture all terminals in parallel using OffscreenAddon
-		const capturePromises = nodeIds.map(async (nodeId) => {
-			// Try OffscreenAddon capture first (works off-screen!)
-			if (terminalCanvases.hasCaptureCallback(nodeId)) {
-				try {
-					const imageData = await terminalCanvases.captureImage(nodeId, targetWidth, targetHeight);
-					// Validate image data: must be a data URL and have reasonable content
-					if (imageData && imageData.startsWith('data:image/') && imageData.length > 500) {
-						return { nodeId, sessionId: nodeId, imageData };
+		const terminalPromises = nodeIds
+			.filter(nodeId => !webviews.some(w => w.id === nodeId))
+			.map(async (nodeId) => {
+				// Try OffscreenAddon capture first (works off-screen!)
+				if (terminalCanvases.hasCaptureCallback(nodeId)) {
+					try {
+						const imageData = await terminalCanvases.captureImage(nodeId, targetWidth, targetHeight);
+						// Validate image data: must be a data URL and have reasonable content
+						if (imageData && imageData.startsWith('data:image/') && imageData.length > 500) {
+							return { nodeId, sessionId: nodeId, imageData, type: 'terminal' as const };
+						}
+					} catch {
+						// Fall through to canvas capture
 					}
-				} catch {
-					// Fall through to canvas capture
 				}
-			}
 
-			// Fallback to canvas capture (only works when visible)
-			const sourceCanvas = terminalCanvases.getCanvas(nodeId);
-			if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
-				try {
-					const { canvas: tempCanvas, ctx } = minimapStore.getTempCanvas(
-						nodeId,
-						sourceCanvas.width,
-						sourceCanvas.height
-					);
-					ctx.fillStyle = '#0a0a0f';
-					ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-					ctx.drawImage(sourceCanvas, 0, 0);
-					const imageData = tempCanvas.toDataURL(); // PNG - faster encoding
-					if (imageData.length > 500) {
-						return { nodeId, sessionId: nodeId, imageData };
+				// Fallback to canvas capture (only works when visible)
+				const sourceCanvas = terminalCanvases.getCanvas(nodeId);
+				if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
+					try {
+						const { canvas: tempCanvas, ctx } = minimapStore.getTempCanvas(
+							nodeId,
+							sourceCanvas.width,
+							sourceCanvas.height
+						);
+						ctx.fillStyle = '#0a0a0f';
+						ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+						ctx.drawImage(sourceCanvas, 0, 0);
+						const imageData = tempCanvas.toDataURL(); // PNG - faster encoding
+						if (imageData.length > 500) {
+							return { nodeId, sessionId: nodeId, imageData, type: 'terminal' as const };
+						}
+					} catch {
+						// Ignore capture errors
 					}
-				} catch {
-					// Ignore capture errors
 				}
-			}
-			return null;
+				return null;
+			});
+
+		// For webviews, just send metadata (placeholder shown in minimap)
+		// Actual screenshot capture would be slow and has cross-origin issues
+		const webviewPromises = webviews.map(async (webview) => {
+			return {
+				nodeId: webview.id,
+				imageData: '', // No screenshot - minimap shows styled placeholder
+				type: 'webview' as const,
+				url: webview.url,
+				title: webview.title
+			};
 		});
 
-		const results = await Promise.all(capturePromises);
-		for (const result of results) {
+		const [terminalResults, webviewResults] = await Promise.all([
+			Promise.all(terminalPromises),
+			Promise.all(webviewPromises)
+		]);
+
+		for (const result of terminalResults) {
+			if (result) {
+				snapshots.push(result);
+			}
+		}
+		for (const result of webviewResults) {
 			if (result) {
 				snapshots.push(result);
 			}
@@ -174,6 +196,7 @@
 
 		return { layout: layout.root, snapshots, aspectRatio };
 	}
+
 
 	onMount(async () => {
 		// Register minimap callbacks

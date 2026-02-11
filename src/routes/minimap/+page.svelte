@@ -3,29 +3,34 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 
-	interface TerminalSnapshot {
+	interface PaneSnapshot {
 		nodeId: string;
-		sessionId: string;
+		sessionId?: string;
 		imageData: string;
+		type: 'terminal' | 'webview';
+		url?: string; // For webviews
+		title?: string; // For webviews
 	}
 
 	interface LayoutUpdate {
 		layout: LayoutNode | null;
-		snapshots: TerminalSnapshot[];
+		snapshots: PaneSnapshot[];
 		aspectRatio?: number;
 	}
 
 	interface LayoutNode {
-		type: 'terminal' | 'split';
+		type: 'terminal' | 'webview' | 'split';
 		id: string;
 		sessionId?: string;
+		url?: string; // For webviews
+		title?: string; // For webviews
 		direction?: 'horizontal' | 'vertical';
 		children?: LayoutNode[];
 		sizes?: number[];
 	}
 
 	let layout = $state<LayoutNode | null>(null);
-	let snapshots = $state<Map<string, string>>(new Map());
+	let snapshots = $state<Map<string, PaneSnapshot>>(new Map());
 	let aspectRatio = $state<number | undefined>(undefined);
 	let alwaysOnTop = $state(true);
 	let unlistenUpdate: (() => void) | null = null;
@@ -79,9 +84,9 @@
 		// Listen for layout updates from main window
 		unlistenUpdate = await listen<LayoutUpdate>('minimap-update', async (event) => {
 			layout = event.payload.layout;
-			const newSnapshots = new Map<string, string>();
+			const newSnapshots = new Map<string, PaneSnapshot>();
 			for (const snap of event.payload.snapshots) {
-				newSnapshots.set(snap.nodeId, snap.imageData);
+				newSnapshots.set(snap.nodeId, snap);
 			}
 			snapshots = newSnapshots;
 
@@ -195,11 +200,24 @@
 
 {#snippet renderNode(node: LayoutNode)}
 	{#if node.type === 'terminal'}
-		<button class="terminal-thumb" onclick={() => handleNodeClick(node.id)} onmousedown={(e) => startDrag(e)}>
-			{#if snapshots.has(node.id)}
-				<img src={snapshots.get(node.id)} alt="Terminal" draggable="false" />
+		{@const snap = snapshots.get(node.id)}
+		<button class="pane-thumb terminal-thumb" onclick={() => handleNodeClick(node.id)} onmousedown={(e) => startDrag(e)}>
+			{#if snap?.imageData}
+				<img src={snap.imageData} alt="Terminal" draggable="false" />
 			{:else}
 				<div class="placeholder"></div>
+			{/if}
+		</button>
+	{:else if node.type === 'webview'}
+		{@const snap = snapshots.get(node.id)}
+		<button class="pane-thumb webview-thumb" onclick={() => handleNodeClick(node.id)} onmousedown={(e) => startDrag(e)}>
+			{#if snap?.imageData}
+				<img src={snap.imageData} alt="Webview" draggable="false" />
+			{:else}
+				<div class="webview-placeholder">
+					<span class="webview-icon">◧</span>
+					<span class="webview-url">{node.title || node.url || 'Browser'}</span>
+				</div>
 			{/if}
 		</button>
 	{:else if node.children}
@@ -378,7 +396,7 @@
 		overflow: hidden;
 	}
 
-	.terminal-thumb {
+	.pane-thumb {
 		width: 100%;
 		height: 100%;
 		border: none;
@@ -391,11 +409,11 @@
 		overflow: hidden;
 	}
 
-	.terminal-thumb:hover {
+	.pane-thumb:hover {
 		opacity: 0.85;
 	}
 
-	.terminal-thumb img {
+	.pane-thumb img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
@@ -404,9 +422,43 @@
 		display: block;
 	}
 
+	.terminal-thumb {
+		background: #0a0a0f;
+	}
+
+	.webview-thumb {
+		background: #1a1a2e;
+	}
+
 	.placeholder {
 		width: 100%;
 		height: 100%;
 		background: #0a0a0f;
+	}
+
+	.webview-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+		color: #64748b;
+	}
+
+	.webview-icon {
+		font-size: 16px;
+		color: #3b82f6;
+	}
+
+	.webview-url {
+		font-size: 8px;
+		max-width: 90%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-align: center;
 	}
 </style>
