@@ -56,22 +56,22 @@
 <style>
 	.split-resizer {
 		flex-shrink: 0;
-		background: #1e1e2e;
+		background: #333333;
 		transition: background 0.15s;
 	}
 
 	.split-resizer.horizontal {
-		width: 4px;
+		width: 2px;
 		cursor: col-resize;
 	}
 
 	.split-resizer.vertical {
-		height: 4px;
+		height: 2px;
 		cursor: row-resize;
 	}
 
 	.split-resizer:hover,
 	.split-resizer.active {
-		background: rgba(59, 130, 246, 0.5);
+		background: rgba(59, 130, 246, 0.7);
 	}
 </style>

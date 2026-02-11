@@ -6,6 +6,7 @@
 	import { minimapStore } from '$lib/stores/minimapStore';
 	import { contextMenuStore } from '$lib/stores/contextMenu';
 	import ContextMenu from '$lib/components/shared/ContextMenu.svelte';
+	import SettingsPanel from '$lib/components/shared/SettingsPanel.svelte';
 
 	let { children } = $props();
 	let unlistenToggle: (() => void) | null = null;
@@ -14,6 +15,9 @@
 
 	let currentPath = $derived($page.url.pathname);
 	let isStandalonePage = $derived(currentPath === '/minimap');
+
+	// Settings panel state
+	let showSettings = $state(false);
 
 	// Dynamic import state - only load in browser after mount
 	let TerminalLanes: typeof import('$lib/components/terminal/TerminalLanes.svelte').default | null = $state(null);
@@ -72,6 +76,11 @@
 			e.preventDefault();
 			minimapStore.toggleWindow();
 		}
+		// Cmd/Ctrl+,: Open settings
+		if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+			e.preventDefault();
+			showSettings = true;
+		}
 	}
 </script>
 
@@ -94,6 +103,9 @@
 				<button class="action-btn" onclick={() => minimapStore.toggleWindow()} title="Toggle minimap (Cmd+Shift+M)">
 					⊞
 				</button>
+				<button class="action-btn" onclick={() => showSettings = true} title="Settings (Cmd+,)">
+					⚙
+				</button>
 			</div>
 		</header>
 
@@ -113,6 +125,11 @@
 		items={$contextMenuStore.items}
 		onClose={() => contextMenuStore.close()}
 	/>
+{/if}
+
+<!-- Settings panel -->
+{#if showSettings}
+	<SettingsPanel onClose={() => showSettings = false} />
 {/if}
 
 <style>

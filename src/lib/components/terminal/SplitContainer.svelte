@@ -206,12 +206,10 @@
 		flex-direction: column;
 		flex-shrink: 0;
 		height: 100%;
-		border-right: 1px solid #1e1e2e;
+		border-right: 2px solid #333333;
 	}
 
-	.column-wrapper:last-child {
-		border-right: none;
-	}
+	/* Keep right border on last lane too for visual consistency */
 
 	.split-child {
 		display: flex;
@@ -225,11 +223,11 @@
 
 	/* Add visual separator between horizontal panes (non-root) */
 	.split-container.horizontal:not(.root-horizontal) > .split-child:not(:last-child) {
-		border-right: 1px solid #1e1e2e;
+		border-right: 2px solid #333333;
 	}
 
 	/* Add visual separator between vertical panes */
 	.split-container.vertical > .split-child:not(:last-child) {
-		border-bottom: 1px solid #1e1e2e;
+		border-bottom: 2px solid #333333;
 	}
 </style>
