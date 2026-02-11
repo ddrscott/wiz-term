@@ -1,6 +1,6 @@
 # wiz-term
 
-A standalone terminal emulator with split panes, built with Tauri 2, SvelteKit 2, and xterm.js.
+A standalone terminal emulator with split panes and integrated browser, built with Tauri 2, SvelteKit 2, and xterm.js.
 
 ---
 
@@ -37,10 +37,13 @@ npm run tauri build
 wiz-term is extracted from a larger project to serve as a focused, high-performance terminal emulator. It features:
 
 - **Split pane layout** - Horizontal and vertical splits with draggable resizers
+- **Integrated browser panes** - Native webviews alongside terminals, sharing cookies like browser tabs
 - **WebGL rendering** - Hardware-accelerated terminal rendering via xterm.js
+- **Inline images** - Support for imgcat/iTerm2 inline images protocol and SIXEL graphics
 - **Minimap window** - Bird's-eye view of all terminal panes with live screenshots
 - **SQLite persistence** - Layout and preferences saved locally
 - **Native mouse handling** - Smooth scroll, text selection, and context menus work naturally
+- **URL detection** - Right-click URLs in terminal to open in browser pane
 
 ## Architecture
 
@@ -59,12 +62,12 @@ wiz-term is extracted from a larger project to serve as a focused, high-performa
 │                     Tauri IPC Bridge                         │
 ├─────────────────────────────────────────────────────────────┤
 │                        Backend (Rust)                        │
-│  ┌─────────────────────────────┐  ┌─────────────────────┐  │
-│  │       PTY Manager           │  │      SQLite         │  │
-│  │  Sessions / I/O / Resize    │  │  - sessions         │  │
-│  │                             │  │  - layout           │  │
-│  │                             │  │  - preferences      │  │
-│  └─────────────────────────────┘  └─────────────────────┘  │
+│  ┌───────────────────┐  ┌───────────────┐  ┌─────────────┐  │
+│  │    PTY Manager    │  │    Webview    │  │   SQLite    │  │
+│  │ Sessions/IO/Resize│  │    Manager    │  │  - sessions │  │
+│  │                   │  │ Create/Update │  │  - layout   │  │
+│  │                   │  │ Navigate/Eval │  │  - prefs    │  │
+│  └───────────────────┘  └───────────────┘  └─────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,13 +92,15 @@ wiz-term/
 │   │   ├── components/
 │   │   │   ├── shared/
 │   │   │   │   └── ResizeHandle.svelte    # Column width resizer
-│   │   │   └── terminal/
-│   │   │       ├── TerminalLanes.svelte   # Main orchestrator
-│   │   │       ├── TerminalPane.svelte    # Pane wrapper
-│   │   │       ├── TerminalLane.svelte    # xterm.js instance
-│   │   │       ├── SplitContainer.svelte  # Layout tree renderer
-│   │   │       ├── SplitResizer.svelte    # Split drag handle
-│   │   │       └── LayoutSlot.svelte      # Bounds measurement
+│   │   │   ├── terminal/
+│   │   │   │   ├── TerminalLanes.svelte   # Main orchestrator
+│   │   │   │   ├── TerminalPane.svelte    # Pane wrapper
+│   │   │   │   ├── TerminalLane.svelte    # xterm.js instance
+│   │   │   │   ├── SplitContainer.svelte  # Layout tree renderer
+│   │   │   │   ├── SplitResizer.svelte    # Split drag handle
+│   │   │   │   └── LayoutSlot.svelte      # Bounds measurement
+│   │   │   └── webview/
+│   │   │       └── WebviewPane.svelte     # Native browser pane
 │   │   │
 │   │   ├── stores/
 │   │   │   ├── terminal.ts          # New terminal events
@@ -125,6 +130,7 @@ wiz-term/
 │   └── src/
 │       ├── main.rs                  # Entry point
 │       ├── lib.rs                   # Tauri setup + commands
+│       ├── webview.rs               # Native webview management
 │       │
 │       ├── pty/
 │       │   ├── mod.rs               # Module exports
@@ -217,18 +223,37 @@ Individual terminal instance that:
 - Manages font sizing and search
 - Captures canvas for minimap via OffscreenAddon
 - Forwards horizontal scroll to parent container for lane navigation
+- Supports inline images via ImageAddon (imgcat/SIXEL)
+- Right-click context menu for URLs to open in browser pane
+
+### WebviewPane.svelte
+
+Native browser pane that:
+- Creates WKWebView child window via Rust backend
+- Tracks parent container bounds for positioning
+- Provides URL bar with navigation (back/forward/refresh)
+- Size presets (S/M/XL) matching terminal lanes
+- Shares cookies across all webview instances (like browser tabs)
+- Uses Chrome user agent for best site compatibility
 
 ### Layout System
 
-The layout is a tree structure:
+The layout is a tree structure supporting both terminals and webviews:
 
 ```typescript
-type LayoutNode = TerminalNode | SplitNode;
+type LayoutNode = TerminalNode | WebviewNode | SplitNode;
 
 interface TerminalNode {
   type: 'terminal';
   id: string;
   sessionId: string;
+}
+
+interface WebviewNode {
+  type: 'webview';
+  id: string;
+  url: string;
+  title?: string;
 }
 
 interface SplitNode {
@@ -242,9 +267,12 @@ interface SplitNode {
 
 Operations in `terminalLayout.ts`:
 - `addTerminal()` - Add terminal to layout
+- `addWebview()` - Add browser pane to layout
 - `splitNode()` - Split a node horizontally/vertically
 - `removeSession()` - Remove terminal and clean up tree
+- `removeNode()` - Remove any node (terminal or webview)
 - `findNodeById()` - Locate node in tree
+- `getAllWebviews()` - Get all webview nodes
 
 ### Minimap System
 
@@ -293,6 +321,8 @@ CREATE TABLE terminal_preferences (
 
 ## Tauri Commands (IPC API)
 
+### Terminal Commands
+
 Commands available from the frontend via `$lib/api/terminal.ts`:
 
 | Command | Description |
@@ -307,6 +337,18 @@ Commands available from the frontend via `$lib/api/terminal.ts`:
 | `pty_get_layout` | Load layout from database |
 | `pty_save_preferences` | Save terminal preferences |
 | `pty_get_preferences` | Load terminal preferences |
+
+### Webview Commands
+
+Commands for managing native browser panes:
+
+| Command | Description |
+|---------|-------------|
+| `create_webview` | Create a new child webview at specified position/size |
+| `update_webview` | Update webview position and size |
+| `close_webview` | Close and remove a webview |
+| `navigate_webview` | Navigate webview to a new URL |
+| `eval_webview` | Execute JavaScript in webview |
 
 ## Building for Production
 
@@ -367,6 +409,18 @@ If you see unsafe function errors in zune-jpeg:
 cd src-tauri
 cargo update zune-jpeg@0.5.12 --precise 0.5.6
 ```
+
+### Webview shows degraded/basic HTML
+
+Some sites (like Google) serve simplified pages to webviews. The app uses a Chrome user agent to get full functionality. If sites still look basic:
+- Reload the page (right-click → Refresh or click ↻)
+- Check that JavaScript is working (try a simple site first)
+
+### Multiple webviews not loading
+
+If opening a second browser pane fails:
+- Check the console for errors
+- The main window reference must be accessible via `get_window("main")`
 
 ## License
 
