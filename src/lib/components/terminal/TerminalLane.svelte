@@ -48,6 +48,7 @@
 	let fitAddon: FitAddon | null = null;
 	let unlistenOutput: (() => void) | null = null;
 	let unlistenExit: (() => void) | null = null;
+	let unlistenDrop: (() => void) | null = null;
 	let resizeObserver: ResizeObserver | null = null;
 	let intersectionObserver: IntersectionObserver | null = null;
 	let isExited = $state(false);
@@ -291,6 +292,27 @@
 		});
 		resizeObserver.observe(containerEl);
 
+		// Listen for Tauri file drop events - gives us real file paths
+		const { getCurrentWindow } = await import('@tauri-apps/api/window');
+		unlistenDrop = await getCurrentWindow().onDragDropEvent(async (event) => {
+			if (event.payload.type === 'drop' && isFocused) {
+				const paths = event.payload.paths;
+				if (paths && paths.length > 0) {
+					// Inject file paths directly - no conversion needed
+					// Claude Code (or any CLI) can read the files directly
+					const encoder = new TextEncoder();
+					for (const filePath of paths) {
+						await writeToSession(session.id, encoder.encode(filePath + ' '));
+					}
+					isDragOver = false;
+				}
+			} else if (event.payload.type === 'over') {
+				// Could track hover state here if needed
+			} else if (event.payload.type === 'leave') {
+				isDragOver = false;
+			}
+		});
+
 		// Handle visibility changes (when switching views)
 		intersectionObserver = new IntersectionObserver(
 			(entries) => {
@@ -312,6 +334,7 @@
 	onDestroy(() => {
 		unlistenOutput?.();
 		unlistenExit?.();
+		unlistenDrop?.();
 		resizeObserver?.disconnect();
 		intersectionObserver?.disconnect();
 		terminalCanvases.unregisterRefreshCallback(nodeId);
@@ -504,25 +527,16 @@
 		// Non-image paste handled by xterm naturally
 	}
 
-	// Handle drop events - check for image files
-	async function handleDrop(e: DragEvent) {
+	// Handle drop events - we suppress the HTML5 drop since Tauri's onDragDropEvent handles it
+	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		e.stopPropagation();
 		isDragOver = false;
-
-		const files = e.dataTransfer?.files;
-		if (!files || files.length === 0) return;
-
-		for (const file of files) {
-			if (file.type.startsWith('image/')) {
-				await injectImageAsPath(file);
-				return;
-			}
-		}
+		// Actual file handling is done by Tauri's onDragDropEvent in onMount
 	}
 
 	function handleDragOver(e: DragEvent) {
-		// Accept image drops
+		// Accept file drops
 		if (e.dataTransfer?.types.includes('Files')) {
 			e.preventDefault();
 			e.stopPropagation();
