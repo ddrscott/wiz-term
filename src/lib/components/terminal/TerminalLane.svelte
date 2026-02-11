@@ -174,12 +174,16 @@
 
 		terminal.open(containerEl);
 
-		// Use WebGL renderer for better performance
-		try {
-			terminal.loadAddon(new WebglAddon(true));
-		} catch (e) {
-			console.warn('WebGL addon failed, using canvas renderer:', e);
+		// WebGL renderer is faster but canvas may look sharper on Retina displays
+		// Canvas renderer uses native 2D context with potentially better text antialiasing
+		if ($settings.terminal.use_webgl) {
+			try {
+				terminal.loadAddon(new WebglAddon(true));
+			} catch (e) {
+				console.warn('WebGL addon failed, using canvas renderer:', e);
+			}
 		}
+		// If use_webgl is false, xterm.js uses its default canvas renderer
 
 		// Load ImageAddon for inline images (SIXEL and iTerm2 IIP protocol)
 		// Enables imgcat and similar tools to display images in the terminal

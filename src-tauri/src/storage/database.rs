@@ -57,14 +57,21 @@ impl Database {
             CREATE TABLE IF NOT EXISTS terminal_preferences (
                 id INTEGER PRIMARY KEY DEFAULT 1,
                 font_size INTEGER NOT NULL DEFAULT 13,
-                font_family TEXT NOT NULL DEFAULT 'JetBrains Mono',
+                font_family TEXT NOT NULL DEFAULT 'SF Mono',
                 scrollback INTEGER NOT NULL DEFAULT 10000,
                 cursor_blink INTEGER NOT NULL DEFAULT 1,
                 minimap_refresh_ms INTEGER NOT NULL DEFAULT 200,
+                use_webgl INTEGER NOT NULL DEFAULT 1,
                 updated_at INTEGER NOT NULL
             );
         "#,
         )?;
+
+        // Migration: Add use_webgl column if missing (for existing databases)
+        let _ = conn.execute(
+            "ALTER TABLE terminal_preferences ADD COLUMN use_webgl INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
 
         Ok(())
     }
@@ -204,10 +211,10 @@ impl Database {
         let now = Utc::now().timestamp();
         conn.execute(
             r#"
-            INSERT OR REPLACE INTO terminal_preferences (id, font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, updated_at)
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT OR REPLACE INTO terminal_preferences (id, font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, use_webgl, updated_at)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
             "#,
-            params![prefs.font_size, prefs.font_family, prefs.scrollback, prefs.cursor_blink as i32, prefs.minimap_refresh_ms, now],
+            params![prefs.font_size, prefs.font_family, prefs.scrollback, prefs.cursor_blink as i32, prefs.minimap_refresh_ms, prefs.use_webgl as i32, now],
         )?;
         Ok(())
     }
@@ -216,7 +223,7 @@ impl Database {
     pub fn get_terminal_preferences(&self) -> SqliteResult<TerminalPreferences> {
         let conn = self.conn.lock().unwrap();
         let result = conn.query_row(
-            "SELECT font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms FROM terminal_preferences WHERE id = 1",
+            "SELECT font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, use_webgl FROM terminal_preferences WHERE id = 1",
             [],
             |row| {
                 Ok(TerminalPreferences {
@@ -225,6 +232,7 @@ impl Database {
                     scrollback: row.get(2)?,
                     cursor_blink: row.get::<_, i32>(3)? != 0,
                     minimap_refresh_ms: row.get(4)?,
+                    use_webgl: row.get::<_, i32>(5).unwrap_or(1) != 0, // Default true if column missing
                 })
             },
         );
@@ -242,16 +250,18 @@ pub struct TerminalPreferences {
     pub scrollback: i32,
     pub cursor_blink: bool,
     pub minimap_refresh_ms: i32,
+    pub use_webgl: bool,
 }
 
 impl Default for TerminalPreferences {
     fn default() -> Self {
         Self {
             font_size: 13,
-            font_family: "JetBrains Mono".to_string(),
+            font_family: "SF Mono".to_string(),
             scrollback: 10000,
             cursor_blink: true,
             minimap_refresh_ms: 200,
+            use_webgl: true, // WebGL faster, but canvas may look sharper on Retina
         }
     }
 }

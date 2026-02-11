@@ -9,10 +9,11 @@ interface Settings {
 const defaultSettings: Settings = {
 	terminal: {
 		font_size: 13,
-		font_family: 'JetBrains Mono',
+		font_family: 'SF Mono',
 		scrollback: 10000,
 		cursor_blink: true,
-		minimap_refresh_ms: 200
+		minimap_refresh_ms: 200,
+		use_webgl: true
 	}
 };
 

@@ -72,14 +72,16 @@ export interface TerminalPreferences {
 	scrollback: number;
 	cursor_blink: boolean;
 	minimap_refresh_ms: number;
+	use_webgl: boolean; // false = canvas renderer (may look sharper on some displays)
 }
 
 export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
 	font_size: 13,
-	font_family: 'JetBrains Mono',
+	font_family: 'SF Mono', // Apple's system font, optimized for Retina displays
 	scrollback: 10000,
 	cursor_blink: true,
-	minimap_refresh_ms: 200
+	minimap_refresh_ms: 200,
+	use_webgl: true // WebGL is faster but canvas may look sharper
 };
 
 // Common monospace fonts for terminal
