@@ -2,23 +2,37 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
 
+	interface Bounds {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	}
+
 	interface Props {
 		nodeId: string;
 		url: string;
 		title?: string;
+		bounds?: Bounds; // Explicit bounds from parent for precise positioning
 		onClose?: () => void;
 		onTitleChange?: (title: string) => void;
 		onUrlChange?: (url: string) => void;
 		onFocus?: (nodeId: string) => void;
 	}
 
-	let { nodeId, url, title, onClose, onTitleChange, onUrlChange, onFocus }: Props = $props();
+	let { nodeId, url, title, bounds, onClose, onTitleChange, onUrlChange, onFocus }: Props = $props();
 
 	let containerEl: HTMLDivElement;
 	let inputUrl = $state(url);
 	let isLoading = $state(true);
 	let webviewReady = false;
 	let webviewId = `browser-${nodeId}`;
+
+	// Derive bounds values for reactivity (all four values to track position AND size)
+	let boundsX = $derived(bounds?.x ?? 0);
+	let boundsY = $derived(bounds?.y ?? 0);
+	let boundsWidth = $derived(bounds?.width ?? 0);
+	let boundsHeight = $derived(bounds?.height ?? 0);
 
 	// Update input when url prop changes
 	$effect(() => {
@@ -29,6 +43,22 @@
 	$effect(() => {
 		if (webviewReady && url) {
 			navigateWebview(url);
+		}
+	});
+
+	// Update webview position when bounds change
+	// Use derived values to ensure reactivity - track ALL bounds (x, y, width, height)
+	$effect(() => {
+		// Access all derived values to track changes - this makes the effect reactive to them
+		const x = boundsX;
+		const y = boundsY;
+		const w = boundsWidth;
+		const h = boundsHeight;
+
+		if (webviewReady && w > 0 && h > 0) {
+			console.log('Bounds changed, updating webview:', { x, y, width: w, height: h });
+			// Pass values directly to avoid closure issues
+			updateWebviewPositionWithBounds(x, y, w, h);
 		}
 	});
 
@@ -64,23 +94,30 @@
 		if (!containerEl) return;
 
 		try {
+			// Use explicit bounds if provided, otherwise measure container
 			const rect = containerEl.getBoundingClientRect();
 
+			// Calculate webview dimensions
+			// Use the full lane width from derived bounds, but position at container's location
+			const x = rect.left;
+			const y = rect.top;
+			const width = boundsWidth > 0 ? boundsWidth : rect.width;
+			const height = rect.height;
+
 			console.log('Creating webview via Rust backend:', webviewId, 'at', {
-				x: rect.left,
-				y: rect.top,
-				width: rect.width,
-				height: rect.height
+				x, y, width, height,
+				boundsWidth: bounds?.width,
+				rectWidth: rect.width
 			});
 
 			// Create webview via Rust command
 			await invoke('create_webview', {
 				id: webviewId,
 				url: url,
-				x: rect.left,
-				y: rect.top,
-				width: rect.width,
-				height: rect.height
+				x,
+				y,
+				width,
+				height
 			});
 
 			console.log('Webview created successfully:', webviewId);
@@ -174,22 +211,36 @@
 	}
 
 	async function updateWebviewPosition() {
+		// Use current derived values
+		updateWebviewPositionWithBounds(boundsX, boundsY, boundsWidth, boundsHeight);
+	}
+
+	async function updateWebviewPositionWithBounds(
+		explicitX: number,
+		explicitY: number,
+		explicitWidth: number,
+		explicitHeight: number
+	) {
 		if (!webviewReady || !containerEl) return;
 
 		const rect = containerEl.getBoundingClientRect();
-		const newWidth = Math.round(rect.width);
-		const newHeight = Math.round(rect.height);
+
+		// Use explicit bounds for position and size
+		// The x/y from bounds is relative to the lanes container, but we need screen coordinates
+		// So we still use rect.left/top for position, but the bounds trigger the update
+		const width = explicitWidth > 0 ? explicitWidth : rect.width;
+		const height = rect.height;
 
 		// Only update if dimensions are valid
-		if (newWidth <= 0 || newHeight <= 0) return;
+		if (width <= 0 || height <= 0) return;
 
 		try {
 			await invoke('update_webview', {
 				id: webviewId,
 				x: rect.left,
 				y: rect.top,
-				width: rect.width,
-				height: rect.height
+				width,
+				height
 			});
 		} catch (e) {
 			// Webview might be closing
@@ -297,6 +348,7 @@
 	.webview-pane {
 		display: flex;
 		flex-direction: column;
+		width: 100%;
 		height: 100%;
 		background: #0f0f1a;
 		overflow: hidden;
@@ -394,6 +446,7 @@
 
 	.webview-container {
 		flex: 1;
+		width: 100%;
 		position: relative;
 		min-height: 0;
 		/* This is where the native webview will be positioned */

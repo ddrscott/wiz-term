@@ -523,6 +523,7 @@
 							nodeId={webview.id}
 							url={webview.url}
 							title={webview.title}
+							bounds={hasBounds ? bounds : undefined}
 							onClose={() => handleCloseWebview(webview.id)}
 							onUrlChange={(url) => handleWebviewUrlChange(webview.id, url)}
 							onTitleChange={(title) => handleWebviewTitleChange(webview.id, title)}
