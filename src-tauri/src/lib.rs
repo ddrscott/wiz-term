@@ -3,10 +3,12 @@ use tauri::menu::{Menu, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 
 pub mod pty;
+pub mod webview;
 mod storage;
 
 use pty::PtySessionManager;
 use storage::database::Database;
+use webview::{WebviewManager, WebviewState};
 
 pub struct AppState {
     pub db: Database,
@@ -102,6 +104,11 @@ pub fn run() {
                 pty_manager: Mutex::new(PtySessionManager::new()),
             });
 
+            // Manage webview state separately for child webviews
+            app.manage(WebviewState {
+                manager: Mutex::new(WebviewManager::new()),
+            });
+
             tracing::info!("wiz-term app initialized");
             app.emit("backend-ready", ()).unwrap();
             Ok(())
@@ -118,6 +125,11 @@ pub fn run() {
             pty::pty_save_preferences,
             pty::pty_get_preferences,
             pty::save_temp_image,
+            webview::create_webview,
+            webview::update_webview,
+            webview::close_webview,
+            webview::navigate_webview,
+            webview::eval_webview,
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

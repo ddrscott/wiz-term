@@ -1,6 +1,7 @@
 import type {
 	LayoutNode,
 	TerminalNode,
+	WebviewNode,
 	SplitNode,
 	TerminalLayout,
 	SplitDirection,
@@ -18,6 +19,16 @@ export function createTerminalNode(sessionId: string): TerminalNode {
 		type: 'terminal',
 		id: generateId(),
 		sessionId
+	};
+}
+
+// Create a new webview node
+export function createWebviewNode(url: string, title?: string): WebviewNode {
+	return {
+		type: 'webview',
+		id: generateId(),
+		url,
+		title
 	};
 }
 
@@ -39,7 +50,7 @@ export function createLayoutWithTerminal(sessionId: string): TerminalLayout {
 
 // Deep clone a layout node
 function cloneNode(node: LayoutNode): LayoutNode {
-	if (node.type === 'terminal') {
+	if (node.type === 'terminal' || node.type === 'webview') {
 		return { ...node };
 	}
 	return {
@@ -121,14 +132,14 @@ export function findParent(
 	return search(layout.root);
 }
 
-// Get all session IDs in the layout
+// Get all session IDs in the layout (terminal nodes only)
 export function getAllSessionIds(layout: TerminalLayout): string[] {
 	const sessionIds: string[] = [];
 
 	function collect(node: LayoutNode) {
 		if (node.type === 'terminal') {
 			sessionIds.push(node.sessionId);
-		} else {
+		} else if (node.type === 'split') {
 			node.children.forEach(collect);
 		}
 	}
@@ -138,6 +149,78 @@ export function getAllSessionIds(layout: TerminalLayout): string[] {
 	}
 
 	return sessionIds;
+}
+
+// Get all webview nodes in the layout
+export function getAllWebviews(layout: TerminalLayout): WebviewNode[] {
+	const webviews: WebviewNode[] = [];
+
+	function collect(node: LayoutNode) {
+		if (node.type === 'webview') {
+			webviews.push(node);
+		} else if (node.type === 'split') {
+			node.children.forEach(collect);
+		}
+	}
+
+	if (layout.root) {
+		collect(layout.root);
+	}
+
+	return webviews;
+}
+
+// Find webview by URL
+export function findWebviewByUrl(layout: TerminalLayout, url: string): WebviewNode | null {
+	if (!layout.root) return null;
+
+	function search(node: LayoutNode): WebviewNode | null {
+		if (node.type === 'webview' && node.url === url) {
+			return node;
+		}
+		if (node.type === 'split') {
+			for (const child of node.children) {
+				const found = search(child);
+				if (found) return found;
+			}
+		}
+		return null;
+	}
+
+	return search(layout.root);
+}
+
+// Update webview URL and/or title
+export function updateWebview(
+	layout: TerminalLayout,
+	nodeId: string,
+	updates: { url?: string; title?: string }
+): TerminalLayout {
+	if (!layout.root) return layout;
+
+	const newLayout = cloneLayout(layout);
+
+	function update(node: LayoutNode): LayoutNode {
+		if (node.type === 'webview' && node.id === nodeId) {
+			return {
+				...node,
+				url: updates.url ?? node.url,
+				title: updates.title ?? node.title
+			};
+		}
+		if (node.type === 'split') {
+			return {
+				...node,
+				children: node.children.map(update)
+			};
+		}
+		return node;
+	}
+
+	return {
+		root: update(newLayout.root!) as LayoutNode,
+		version: layout.version
+	};
 }
 
 // Convert drop zone to split direction
@@ -193,6 +276,137 @@ export function addTerminal(layout: TerminalLayout, sessionId: string): Terminal
 	};
 }
 
+// Add a webview to the right of a target node (or at root level if no target)
+export function addWebview(
+	layout: TerminalLayout,
+	url: string,
+	title?: string,
+	targetNodeId?: string
+): TerminalLayout {
+	const newNode = createWebviewNode(url, title);
+
+	if (!layout.root) {
+		return {
+			root: newNode,
+			version: layout.version
+		};
+	}
+
+	// If target specified, insert after that column
+	if (targetNodeId) {
+		return insertNodeAfter(layout, targetNodeId, newNode);
+	}
+
+	// Otherwise add to root level
+	if (layout.root.type === 'split' && layout.root.direction === 'horizontal') {
+		const existingRoot = layout.root;
+		const numChildren = existingRoot.children.length;
+		const newSize = 100 / (numChildren + 1);
+		const scaleFactor = numChildren / (numChildren + 1);
+
+		return {
+			root: {
+				...existingRoot,
+				children: [...existingRoot.children.map(cloneNode), newNode],
+				sizes: [...existingRoot.sizes.map((s) => s * scaleFactor), newSize]
+			},
+			version: layout.version
+		};
+	}
+
+	// Create horizontal split
+	const newRoot: SplitNode = {
+		type: 'split',
+		id: generateId(),
+		direction: 'horizontal',
+		children: [cloneNode(layout.root), newNode],
+		sizes: [50, 50]
+	};
+
+	return {
+		root: newRoot,
+		version: layout.version
+	};
+}
+
+// Generic function to insert a node after another node's column
+function insertNodeAfter(
+	layout: TerminalLayout,
+	targetNodeId: string,
+	newNode: LayoutNode
+): TerminalLayout {
+	if (!layout.root) {
+		return { root: newNode, version: layout.version };
+	}
+
+	// If root is a single node (terminal or webview)
+	if (layout.root.type === 'terminal' || layout.root.type === 'webview') {
+		if (layout.root.id === targetNodeId) {
+			const newRoot: SplitNode = {
+				type: 'split',
+				id: generateId(),
+				direction: 'horizontal',
+				children: [cloneNode(layout.root), newNode],
+				sizes: [50, 50]
+			};
+			return { root: newRoot, version: layout.version };
+		}
+		return layout;
+	}
+
+	// Root is a split - find which column contains the target
+	const rootSplit = layout.root; // Type narrowed to SplitNode
+	if (rootSplit.direction === 'horizontal') {
+		let targetColumnIndex = -1;
+		for (let i = 0; i < rootSplit.children.length; i++) {
+			const child = rootSplit.children[i];
+			if (child.id === targetNodeId) {
+				targetColumnIndex = i;
+				break;
+			}
+			if (child.type === 'split') {
+				function containsNode(node: LayoutNode): boolean {
+					if (node.id === targetNodeId) return true;
+					if (node.type === 'split') {
+						return node.children.some(containsNode);
+					}
+					return false;
+				}
+				if (containsNode(child)) {
+					targetColumnIndex = i;
+					break;
+				}
+			}
+		}
+
+		if (targetColumnIndex !== -1) {
+			const newChildren = [...rootSplit.children];
+			newChildren.splice(targetColumnIndex + 1, 0, newNode);
+			const numChildren = newChildren.length;
+			const equalSize = 100 / numChildren;
+
+			return {
+				root: {
+					...rootSplit,
+					children: newChildren.map(cloneNode),
+					sizes: newChildren.map(() => equalSize)
+				},
+				version: layout.version
+			};
+		}
+	}
+
+	// Fallback: wrap in horizontal split
+	const newRoot: SplitNode = {
+		type: 'split',
+		id: generateId(),
+		direction: 'horizontal',
+		children: [cloneNode(layout.root), newNode],
+		sizes: [50, 50]
+	};
+	return { root: newRoot, version: layout.version };
+}
+
 // Insert a new terminal column after the column containing the target node
 // Used for Cmd+D horizontal splits to maintain independent column widths
 export function insertTerminalAfter(
@@ -222,12 +436,27 @@ export function insertTerminalAfter(
 		return layout;
 	}
 
+	// Root must be a split at this point (terminal case handled above)
+	if (layout.root.type !== 'split') {
+		// Fallback: wrap in horizontal split
+		const newRoot: SplitNode = {
+			type: 'split',
+			id: generateId(),
+			direction: 'horizontal',
+			children: [cloneNode(layout.root), newNode],
+			sizes: [50, 50]
+		};
+		return { root: newRoot, version: layout.version };
+	}
+
+	const rootSplit = layout.root;
+
 	// Root is a split - find which column contains the target
-	if (layout.root.direction === 'horizontal') {
+	if (rootSplit.direction === 'horizontal') {
 		// Find the index of the column containing the target
 		let targetColumnIndex = -1;
-		for (let i = 0; i < layout.root.children.length; i++) {
-			const child = layout.root.children[i];
+		for (let i = 0; i < rootSplit.children.length; i++) {
+			const child = rootSplit.children[i];
 			if (child.id === targetNodeId) {
 				targetColumnIndex = i;
 				break;
@@ -250,8 +479,7 @@ export function insertTerminalAfter(
 
 		if (targetColumnIndex !== -1) {
 			// Insert new column after the target column
-			const newChildren = [...layout.root.children];
-			const newSizes = [...layout.root.sizes];
+			const newChildren = [...rootSplit.children];
 
 			// Insert new node after target column
 			newChildren.splice(targetColumnIndex + 1, 0, newNode);
@@ -263,7 +491,7 @@ export function insertTerminalAfter(
 
 			return {
 				root: {
-					...layout.root,
+					...rootSplit,
 					children: newChildren.map(cloneNode),
 					sizes: newSizesArray
 				},
@@ -338,11 +566,12 @@ export function removeNode(layout: TerminalLayout, nodeId: string): TerminalLayo
 	const newLayout = cloneLayout(layout);
 
 	function remove(node: LayoutNode): LayoutNode | null {
-		if (node.type === 'terminal') {
+		// Terminal and webview nodes are leaf nodes - return as-is
+		if (node.type === 'terminal' || node.type === 'webview') {
 			return node;
 		}
 
-		// Filter out the node to remove
+		// node is a split - filter out the node to remove
 		const newChildren: LayoutNode[] = [];
 		const newSizes: number[] = [];
 		let removedIndex = -1;
@@ -510,10 +739,13 @@ export function getFirstTerminal(layout: TerminalLayout): TerminalNode | null {
 
 	function find(node: LayoutNode): TerminalNode | null {
 		if (node.type === 'terminal') return node;
-		for (const child of node.children) {
-			const found = find(child);
-			if (found) return found;
+		if (node.type === 'split') {
+			for (const child of node.children) {
+				const found = find(child);
+				if (found) return found;
+			}
 		}
+		// webview nodes don't contain terminals
 		return null;
 	}
 
@@ -525,13 +757,16 @@ export function getFirstTerminal(layout: TerminalLayout): TerminalNode | null {
 export function findRootColumnId(layout: TerminalLayout, nodeId: string): string | null {
 	if (!layout.root) return null;
 
-	// If root is a terminal and matches, return its id
-	if (layout.root.type === 'terminal') {
+	// If root is a terminal or webview and matches, return its id
+	if (layout.root.type === 'terminal' || layout.root.type === 'webview') {
 		return layout.root.id === nodeId ? layout.root.id : null;
 	}
 
+	// Root is a split
+	const rootSplit = layout.root;
+
 	// If root is not a horizontal split, the whole thing is one "column"
-	if (layout.root.direction !== 'horizontal') {
+	if (rootSplit.direction !== 'horizontal') {
 		// Check if nodeId is anywhere in this tree
 		function contains(node: LayoutNode): boolean {
 			if (node.id === nodeId) return true;
@@ -540,11 +775,11 @@ export function findRootColumnId(layout: TerminalLayout, nodeId: string): string
 			}
 			return false;
 		}
-		return contains(layout.root) ? layout.root.id : null;
+		return contains(rootSplit) ? rootSplit.id : null;
 	}
 
 	// Root is horizontal split - find which child contains the nodeId
-	for (const child of layout.root.children) {
+	for (const child of rootSplit.children) {
 		function contains(node: LayoutNode): boolean {
 			if (node.id === nodeId) return true;
 			if (node.type === 'split') {

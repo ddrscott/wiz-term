@@ -4,6 +4,8 @@
 	import { page } from '$app/stores';
 	import { terminalActions } from '$lib/stores/terminal';
 	import { minimapStore } from '$lib/stores/minimapStore';
+	import { contextMenuStore } from '$lib/stores/contextMenu';
+	import ContextMenu from '$lib/components/shared/ContextMenu.svelte';
 
 	let { children } = $props();
 	let unlistenToggle: (() => void) | null = null;
@@ -101,6 +103,16 @@
 			{/if}
 		</main>
 	</div>
+{/if}
+
+<!-- Global context menu - rendered at top level to escape transform containing blocks -->
+{#if $contextMenuStore}
+	<ContextMenu
+		x={$contextMenuStore.x}
+		y={$contextMenuStore.y}
+		items={$contextMenuStore.items}
+		onClose={() => contextMenuStore.close()}
+	/>
 {/if}
 
 <style>

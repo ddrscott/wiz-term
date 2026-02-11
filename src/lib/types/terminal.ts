@@ -38,6 +38,13 @@ export interface TerminalNode {
 	sessionId: string;
 }
 
+export interface WebviewNode {
+	type: 'webview';
+	id: string;
+	url: string;
+	title?: string;
+}
+
 export interface SplitNode {
 	type: 'split';
 	id: string;
@@ -46,7 +53,7 @@ export interface SplitNode {
 	sizes: number[]; // Percentages, e.g., [50, 50]
 }
 
-export type LayoutNode = TerminalNode | SplitNode;
+export type LayoutNode = TerminalNode | WebviewNode | SplitNode;
 
 export interface TerminalLayout {
 	root: LayoutNode | null;

@@ -13,26 +13,33 @@
 	import { terminalBounds } from '$lib/stores/terminalBounds';
 	import SplitContainer from './SplitContainer.svelte';
 	import TerminalLane from './TerminalLane.svelte';
+	import WebviewPane from '$lib/components/webview/WebviewPane.svelte';
 	import type {
 		TerminalSession,
 		TerminalLayout,
 		DropZone,
-		LayoutNode
+		LayoutNode,
+		WebviewNode
 	} from '$lib/types/terminal';
 	import {
 		createEmptyLayout,
 		createLayoutWithTerminal,
 		addTerminal,
+		addWebview,
 		splitNode,
 		insertTerminalAfter,
 		removeSession,
+		removeNode,
 		resizeSplit,
 		getAllSessionIds,
+		getAllWebviews,
+		updateWebview,
 		serializeLayout,
 		deserializeLayout,
 		getFirstTerminal,
 		findNodeBySessionId,
-		findRootColumnId
+		findRootColumnId,
+		findNodeById
 	} from '$lib/utils/terminalLayout';
 
 	interface Props {
@@ -85,11 +92,11 @@
 		}, 500);
 	}
 
-	// Helper to get all node IDs from layout tree
+	// Helper to get all node IDs from layout tree (terminals and webviews)
 	function getAllNodeIds(node: LayoutNode | null): string[] {
 		if (!node) return [];
-		if (node.type === 'terminal') return [node.id];
-		if (node.children) {
+		if (node.type === 'terminal' || node.type === 'webview') return [node.id];
+		if (node.type === 'split') {
 			return node.children.flatMap(getAllNodeIds);
 		}
 		return [];
@@ -380,19 +387,62 @@
 			handleNewSession();
 		}
 
-		// Cmd+W - close focused terminal
+		// Cmd+W - close focused pane (terminal or webview)
 		if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
 			e.preventDefault();
 			if (focusedNodeId) {
-				const node = getAllSessionIds(layout).find((sessionId) => {
-					const n = findNodeBySessionId(layout, sessionId);
+				// Check if it's a terminal
+				const sessionId = getAllSessionIds(layout).find((sid) => {
+					const n = findNodeBySessionId(layout, sid);
 					return n?.id === focusedNodeId;
 				});
-				if (node) {
-					handleCloseSession(node);
+				if (sessionId) {
+					handleCloseSession(sessionId);
+					return;
+				}
+
+				// Check if it's a webview
+				const webview = getAllWebviews(layout).find((w) => w.id === focusedNodeId);
+				if (webview) {
+					handleCloseWebview(webview.id);
 				}
 			}
 		}
+	}
+
+	// Open a URL in a webview pane to the right of the focused terminal
+	function handleOpenWebview(url: string, title?: string) {
+		layout = addWebview(layout, url, title, focusedNodeId ?? undefined);
+
+		// Find the new webview and focus it
+		const webviews = getAllWebviews(layout);
+		const newWebview = webviews.find((w) => w.url === url);
+		if (newWebview) {
+			focusedNodeId = newWebview.id;
+		}
+
+		debouncedSaveLayout();
+	}
+
+	function handleCloseWebview(nodeId: string) {
+		layout = removeNode(layout, nodeId);
+
+		// Update focus if needed
+		if (focusedNodeId === nodeId) {
+			const first = getFirstTerminal(layout);
+			focusedNodeId = first?.id ?? null;
+		}
+
+		debouncedSaveLayout();
+	}
+
+	function handleWebviewUrlChange(nodeId: string, url: string) {
+		layout = updateWebview(layout, nodeId, { url });
+		debouncedSaveLayout();
+	}
+
+	function handleWebviewTitleChange(nodeId: string, title: string) {
+		layout = updateWebview(layout, nodeId, { title });
 	}
 </script>
 
@@ -451,9 +501,34 @@
 									if (columnId) handleColumnWidthChange(columnId, width);
 								}}
 								onFocus={handleFocus}
+								onOpenWebview={handleOpenWebview}
 							/>
 						</div>
 					{/if}
+				{/each}
+
+				<!-- Webview registry - webviews positioned absolutely like terminals -->
+				{#each getAllWebviews(layout) as webview (webview.id)}
+					{@const bounds = $terminalBounds.get(webview.id)}
+					{@const hasBounds = bounds && bounds.width > 0 && bounds.height > 0}
+					<div
+						class="terminal-wrapper"
+						class:hidden={!hasBounds}
+						style:left="{hasBounds ? bounds.x : 0}px"
+						style:top="{hasBounds ? bounds.y : 0}px"
+						style:width="{hasBounds ? bounds.width : 1}px"
+						style:height="{hasBounds ? bounds.height : 1}px"
+					>
+						<WebviewPane
+							nodeId={webview.id}
+							url={webview.url}
+							title={webview.title}
+							onClose={() => handleCloseWebview(webview.id)}
+							onUrlChange={(url) => handleWebviewUrlChange(webview.id, url)}
+							onTitleChange={(title) => handleWebviewTitleChange(webview.id, title)}
+							onFocus={handleFocus}
+						/>
+					</div>
 				{/each}
 			</div>
 		{/if}

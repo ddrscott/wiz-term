@@ -8,6 +8,7 @@
 	import { WebglAddon } from '@xterm/addon-webgl';
 	import { OffscreenAddon } from 'xterm-addon-offscreen';
 	import '@xterm/xterm/css/xterm.css';
+	import { contextMenuStore } from '$lib/stores/contextMenu';
 	import {
 		writeToSession,
 		resizeSession,
@@ -28,9 +29,10 @@
 		onClose?: () => void;
 		onWidthChange?: (width: number) => void;
 		onFocus?: (nodeId: string) => void;
+		onOpenWebview?: (url: string, title?: string) => void;
 	}
 
-	let { session, nodeId, visible = true, onClose, onWidthChange, onFocus }: Props = $props();
+	let { session, nodeId, visible = true, onClose, onWidthChange, onFocus, onOpenWebview }: Props = $props();
 
 	const MIN_FONT_SIZE = 8;
 	const MAX_FONT_SIZE = 24;
@@ -133,7 +135,32 @@
 
 		fitAddon = new FitAddon();
 		terminal.loadAddon(fitAddon);
-		terminal.loadAddon(new WebLinksAddon());
+
+		// Custom link handler - show context menu on Cmd+Click
+		terminal.loadAddon(new WebLinksAddon((event, uri) => {
+			console.log('Link clicked:', uri, event);
+			event.preventDefault();
+			// Show context menu at click position via store
+			contextMenuStore.show(event.clientX, event.clientY, [
+				{
+					label: 'Open in Webview',
+					icon: '◧',
+					action: () => {
+						onOpenWebview?.(uri);
+						contextMenuStore.close();
+					}
+				},
+				{
+					label: 'Open in Browser',
+					icon: '↗',
+					action: async () => {
+						const { open } = await import('@tauri-apps/plugin-shell');
+						await open(uri);
+						contextMenuStore.close();
+					}
+				}
+			]);
+		}));
 
 		// Search addon
 		searchAddon = new SearchAddon();

@@ -80,6 +80,15 @@
 		{onFocus}
 		{boundsGeneration}
 	/>
+{:else if node.type === 'webview'}
+	<!-- Webview slot - fills available space -->
+	<LayoutSlot
+		nodeId={node.id}
+		containerEl={lanesContainerEl}
+		{focusedNodeId}
+		{onFocus}
+		{boundsGeneration}
+	/>
 {:else if isRoot && node.direction === 'horizontal'}
 	<!-- Root-level horizontal split: fixed-width columns for horizontal scrolling -->
 	<div class="split-container horizontal root-horizontal" bind:this={containerEl}>

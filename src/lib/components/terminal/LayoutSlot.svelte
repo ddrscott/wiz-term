@@ -4,7 +4,7 @@
 
 	interface Props {
 		nodeId: string;
-		sessionId: string;
+		sessionId?: string; // Optional - terminals have sessionId, webviews don't
 		containerEl: HTMLElement | null; // Reference to the lanes container for relative positioning
 		focusedNodeId: string | null;
 		onFocus: (nodeId: string) => void;
