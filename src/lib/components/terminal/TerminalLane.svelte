@@ -6,6 +6,7 @@
 	import { SearchAddon } from '@xterm/addon-search';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
 	import { WebglAddon } from '@xterm/addon-webgl';
+	import { ImageAddon } from '@xterm/addon-image';
 	import { OffscreenAddon } from 'xterm-addon-offscreen';
 	import '@xterm/xterm/css/xterm.css';
 	import { contextMenuStore } from '$lib/stores/contextMenu';
@@ -178,6 +179,21 @@
 			terminal.loadAddon(new WebglAddon(true));
 		} catch (e) {
 			console.warn('WebGL addon failed, using canvas renderer:', e);
+		}
+
+		// Load ImageAddon for inline images (SIXEL and iTerm2 IIP protocol)
+		// Enables imgcat and similar tools to display images in the terminal
+		try {
+			const imageAddon = new ImageAddon({
+				enableSizeReports: true,
+				sixelSupport: true,
+				sixelScrolling: true,
+				iipSupport: true, // iTerm2 Inline Image Protocol
+				iipSizeLimit: 50000000 // 50MB limit for images
+			});
+			terminal.loadAddon(imageAddon);
+		} catch (e) {
+			console.warn('ImageAddon failed to load:', e);
 		}
 
 		// Load OffscreenAddon for minimap capture (works even when terminal is off-screen)
