@@ -1,0 +1,36 @@
+[package]
+name = "wiz-term"
+version = "0.1.0"
+description = "A standalone terminal emulator with split panes and tmux persistence"
+authors = ["Scott Pierce"]
+edition = "2021"
+
+[lib]
+name = "wiz_term"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-mcp-bridge = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+dirs = "5"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+shellexpand = "3"
+portable-pty = "0.9"
+
+[profile.release]
+lto = true
+opt-level = "z"
+strip = true
