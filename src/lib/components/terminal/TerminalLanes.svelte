@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { invoke } from '@tauri-apps/api/core';
 	import {
 		createSession,
 		listSessions,
@@ -424,8 +425,23 @@
 		debouncedSaveLayout();
 	}
 
-	function handleCloseWebview(nodeId: string) {
+	async function handleCloseWebview(nodeId: string) {
+		// Close the native webview first (don't wait for onDestroy)
+		try {
+			await invoke('close_webview', { id: `browser-${nodeId}` });
+		} catch (e) {
+			// Webview might already be closed
+			console.warn('Failed to close webview:', e);
+		}
+
+		// Remove stale bounds entry
+		terminalBounds.removeBounds(nodeId);
+
+		// Then remove from layout
 		layout = removeNode(layout, nodeId);
+
+		// Force bounds recalculation
+		boundsGeneration++;
 
 		// Update focus if needed
 		if (focusedNodeId === nodeId) {

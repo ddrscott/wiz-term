@@ -408,7 +408,7 @@
 		background: transparent;
 		border: none;
 		color: #94a3b8;
-		font-size: 11px;
+		font-size: 13px;
 		font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 		outline: none;
 		overflow: hidden;
@@ -448,7 +448,7 @@
 		border: 1px solid transparent;
 		color: #4b5563;
 		cursor: pointer;
-		font-size: 9px;
+		font-size: 11px;
 		font-weight: 500;
 		line-height: 1;
 		padding: 2px 4px;
