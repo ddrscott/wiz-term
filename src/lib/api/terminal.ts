@@ -5,8 +5,7 @@ import type {
 	CreateSessionOptions,
 	TerminalOutput,
 	TerminalExit,
-	TerminalPreferences,
-	ReconnectableSession
+	TerminalPreferences
 } from '$lib/types/terminal';
 
 export async function createSession(options?: CreateSessionOptions): Promise<TerminalSession> {
@@ -57,43 +56,4 @@ export async function savePreferences(preferences: TerminalPreferences): Promise
 
 export async function getPreferences(): Promise<TerminalPreferences> {
 	return invoke('pty_get_preferences');
-}
-
-/** Check if tmux is being used for session persistence */
-export async function isUsingTmux(): Promise<boolean> {
-	return invoke('pty_is_using_tmux');
-}
-
-/** List existing tmux sessions that can be reconnected to */
-export async function listReconnectable(): Promise<ReconnectableSession[]> {
-	return invoke('pty_list_reconnectable');
-}
-
-/** Reconnect to an existing tmux session */
-export async function reconnectSession(
-	sessionId: string,
-	cols?: number,
-	rows?: number
-): Promise<TerminalSession> {
-	return invoke('pty_reconnect_session', { sessionId, cols, rows });
-}
-
-/** Get the current tmux config content */
-export async function getTmuxConfig(): Promise<string> {
-	return invoke('pty_get_tmux_config');
-}
-
-/** Set the tmux config content */
-export async function setTmuxConfig(content: string): Promise<void> {
-	return invoke('pty_set_tmux_config', { content });
-}
-
-/** Reset tmux config to defaults and return the new content */
-export async function resetTmuxConfig(): Promise<string> {
-	return invoke('pty_reset_tmux_config');
-}
-
-/** Get the path to the tmux config file */
-export async function getTmuxConfigPath(): Promise<string> {
-	return invoke('pty_get_tmux_config_path');
 }

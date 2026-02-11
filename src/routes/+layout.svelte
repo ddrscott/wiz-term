@@ -97,6 +97,8 @@
 		background: #0a0a0f;
 		color: #e2e8f0;
 		overflow: hidden;
+		/* Prevent any overscroll effects from bubbling */
+		overscroll-behavior: none;
 	}
 
 	.terminal-header {

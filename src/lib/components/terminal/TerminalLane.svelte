@@ -456,6 +456,31 @@
 			isFocused = false;
 		}
 	}
+
+	// Handle wheel events: vertical scroll goes to xterm (scrollback), horizontal scroll bubbles up
+	function handleWheel(e: WheelEvent) {
+		// Determine scroll direction - check if primarily horizontal
+		const absX = Math.abs(e.deltaX);
+		const absY = Math.abs(e.deltaY);
+
+		// If horizontal scroll is dominant (or significant), forward it to the lanes container
+		// Use a threshold to handle trackpad diagonal scrolls
+		if (absX > 0 && absX >= absY * 0.5) {
+			// Find the lanes container (parent with overflow-x: auto)
+			const lanesContainer = containerEl?.closest('.lanes-container');
+			if (lanesContainer) {
+				// Forward horizontal scroll to lanes container
+				lanesContainer.scrollLeft += e.deltaX;
+
+				// If this was primarily horizontal, prevent xterm from handling it
+				if (absX > absY) {
+					e.preventDefault();
+					e.stopPropagation();
+				}
+			}
+		}
+		// Vertical scroll passes through to xterm naturally
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -505,6 +530,7 @@
 		class="terminal-container"
 		bind:this={containerEl}
 		oncontextmenu={(e) => e.preventDefault()}
+		onwheel={handleWheel}
 	></div>
 </div>
 
@@ -518,6 +544,8 @@
 		min-width: 0;
 		background: var(--terminal-bg);
 		user-select: none;
+		overflow: hidden;
+		overscroll-behavior: none;
 	}
 
 
@@ -656,6 +684,7 @@
 		min-height: 0;
 		padding: 8px;
 		overflow: hidden;
+		overscroll-behavior: none;
 		/* Force GPU layer to keep WebGL rendering even when scrolled off-screen */
 		transform: translateZ(0);
 		content-visibility: visible;
@@ -675,5 +704,9 @@
 
 	.terminal-container :global(.xterm-viewport) {
 		overflow-y: auto !important;
+		/* Disable horizontal scroll in xterm - let it bubble up to lanes container */
+		overflow-x: hidden !important;
+		/* Contain vertical scroll, prevent any overscroll effects */
+		overscroll-behavior: contain;
 	}
 </style>

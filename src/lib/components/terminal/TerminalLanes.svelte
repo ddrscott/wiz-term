@@ -3,12 +3,9 @@
 	import {
 		createSession,
 		listSessions,
-		killSession,
 		onTerminalExit,
 		saveLayout,
-		getLayout,
-		listReconnectable,
-		reconnectSession
+		getLayout
 	} from '$lib/api/terminal';
 	import { terminalActions } from '$lib/stores/terminal';
 	import { terminalCanvases } from '$lib/stores/terminalCanvases';
@@ -175,8 +172,8 @@
 		minimapStore.setCaptureCallback(captureSnapshots);
 		minimapStore.setFocusCallback(handleFocus);
 
-		// FIRST: Load any already-active PTY sessions from backend
-		// This is important on frontend refresh - the backend may still have active sessions
+		// Load any already-active PTY sessions from backend
+		// This handles frontend refresh while backend still has active sessions
 		let existingSessions: TerminalSession[] = [];
 		try {
 			existingSessions = await listSessions();
@@ -187,43 +184,9 @@
 			console.error('Failed to load terminal sessions:', e);
 		}
 
-		// Create set of existing session IDs to avoid duplicate reconnection
-		const existingSessionIds = new Set(existingSessions.map((s) => s.id));
-
-		// Check for reconnectable tmux sessions from previous app session
-		let reconnectableSessions: { session_id: string }[] = [];
-		try {
-			reconnectableSessions = await listReconnectable();
-			if (reconnectableSessions.length > 0) {
-				console.log(`Found ${reconnectableSessions.length} tmux sessions to potentially reconnect`);
-			}
-		} catch (e) {
-			console.error('Failed to list reconnectable sessions:', e);
-		}
-
-		// Reconnect ONLY to tmux sessions that don't already have an active PTY
-		const reconnectedSessions: TerminalSession[] = [];
-		for (const rs of reconnectableSessions) {
-			// Skip if we already have an active PTY session for this
-			if (existingSessionIds.has(rs.session_id)) {
-				console.log(`Session ${rs.session_id} already has active PTY, skipping reconnect`);
-				continue;
-			}
-			try {
-				const session = await reconnectSession(rs.session_id);
-				reconnectedSessions.push(session);
-				console.log(`Reconnected to tmux session: ${rs.session_id}`);
-			} catch (e) {
-				console.error(`Failed to reconnect to session ${rs.session_id}:`, e);
-			}
-		}
-
-		// Merge existing and reconnected sessions
-		const allSessions = [...existingSessions, ...reconnectedSessions];
-
 		// Create sessions map
 		const sessionMap = new Map<string, TerminalSession>();
-		for (const s of allSessions) {
+		for (const s of existingSessions) {
 			sessionMap.set(s.id, s);
 		}
 		sessions = sessionMap;
@@ -254,13 +217,12 @@
 			console.error('Failed to load layout:', e);
 		}
 
-		// Add any reconnected sessions that aren't in the layout
-		// This preserves tmux sessions across app restarts/reloads
+		// Add any existing sessions that aren't in the layout
 		const layoutSessionIdSet = new Set(getAllSessionIds(layout));
 		let addedSessions = false;
 		for (const [sessionId] of sessions) {
 			if (!layoutSessionIdSet.has(sessionId)) {
-				console.log(`Adding reconnected session to layout: ${sessionId}`);
+				console.log(`Adding session to layout: ${sessionId}`);
 				if (!layout.root) {
 					layout = createLayoutWithTerminal(sessionId);
 				} else {
@@ -270,12 +232,12 @@
 			}
 		}
 
-		// Save layout if we added reconnected sessions
+		// Save layout if we added sessions
 		if (addedSessions) {
 			await saveLayoutNow();
 		}
 
-		// If still no layout (no sessions at all), create a new session
+		// If no layout (no sessions at all), create a new session
 		if (!layout.root) {
 			await handleNewSession();
 		}
@@ -505,6 +467,8 @@
 		height: 100%;
 		min-height: 0;
 		user-select: none;
+		overflow: hidden;
+		overscroll-behavior: none;
 	}
 
 	.lanes-container {
@@ -516,6 +480,8 @@
 		overflow-y: hidden;
 		background: var(--terminal-bg);
 		user-select: none;
+		/* Contain scroll - don't propagate to parent or trigger bounce */
+		overscroll-behavior: contain;
 	}
 
 	.terminal-registry {

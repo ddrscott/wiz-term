@@ -7,16 +7,6 @@ export interface TerminalSession {
 	cols: number;
 	rows: number;
 	is_alive: boolean;
-	/** Whether this session is backed by tmux (persistent across app restarts) */
-	is_tmux: boolean;
-}
-
-/** A tmux session that can be reconnected to */
-export interface ReconnectableSession {
-	session_id: string;
-	tmux_session_name: string;
-	created_at: number;
-	attached: boolean;
 }
 
 export interface CreateSessionOptions {

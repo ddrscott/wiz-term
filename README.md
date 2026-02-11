@@ -1,13 +1,13 @@
 # wiz-term
 
-A standalone terminal emulator with split panes and tmux persistence, built with Tauri 2, SvelteKit 2, and xterm.js.
+A standalone terminal emulator with split panes, built with Tauri 2, SvelteKit 2, and xterm.js.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Prerequisites: Node.js 18+, Rust 1.70+, tmux (optional but recommended)
+# Prerequisites: Node.js 18+, Rust 1.70+
 
 # Install dependencies
 npm install
@@ -37,10 +37,10 @@ npm run tauri build
 wiz-term is extracted from a larger project to serve as a focused, high-performance terminal emulator. It features:
 
 - **Split pane layout** - Horizontal and vertical splits with draggable resizers
-- **tmux persistence** - Sessions survive app restarts via transparent tmux integration
 - **WebGL rendering** - Hardware-accelerated terminal rendering via xterm.js
 - **Minimap window** - Bird's-eye view of all terminal panes with live screenshots
 - **SQLite persistence** - Layout and preferences saved locally
+- **Native mouse handling** - Smooth scroll, text selection, and context menus work naturally
 
 ## Architecture
 
@@ -59,12 +59,12 @@ wiz-term is extracted from a larger project to serve as a focused, high-performa
 │                     Tauri IPC Bridge                         │
 ├─────────────────────────────────────────────────────────────┤
 │                        Backend (Rust)                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ PTY Manager │  │    tmux     │  │      SQLite         │  │
-│  │  Sessions   │  │ Integration │  │  - sessions         │  │
-│  │  I/O        │  │  Socket     │  │  - layout           │  │
-│  │  Resize     │  │  Config     │  │  - preferences      │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌─────────────────────────────┐  ┌─────────────────────┐  │
+│  │       PTY Manager           │  │      SQLite         │  │
+│  │  Sessions / I/O / Resize    │  │  - sessions         │  │
+│  │                             │  │  - layout           │  │
+│  │                             │  │  - preferences      │  │
+│  └─────────────────────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -129,7 +129,6 @@ wiz-term/
 │       ├── pty/
 │       │   ├── mod.rs               # Module exports
 │       │   ├── session.rs           # PTY session management
-│       │   ├── tmux.rs              # tmux integration
 │       │   └── commands.rs          # Tauri command handlers
 │       │
 │       └── storage/
@@ -145,7 +144,6 @@ wiz-term/
 
 - **Node.js** 18+ and npm
 - **Rust** 1.70+ (install via [rustup](https://rustup.rs))
-- **tmux** (optional, for session persistence)
 - **Xcode Command Line Tools** (macOS): `xcode-select --install`
 
 ### Setup
@@ -201,23 +199,13 @@ Preferences are stored in SQLite and can be modified via the settings store:
 | `cursor_blink` | true | Enable cursor blinking |
 | `minimap_refresh_ms` | 200 | Minimap update interval |
 
-### tmux Configuration
-
-wiz-term uses a dedicated tmux socket (`wizterm`) and config file to avoid conflicts:
-
-- **Socket**: `/tmp/tmux-{uid}/wizterm`
-- **Config**: `~/Library/Application Support/wiz-term/tmux.conf` (macOS)
-- **Session prefix**: `wizterm-{uuid}`
-
-The default config makes tmux invisible (no status bar, pass-through mouse events). Edit the config file to customize tmux behavior.
-
 ## Key Components
 
 ### TerminalLanes.svelte
 
 The main orchestrator component that:
 - Manages the layout tree (splits and terminals)
-- Handles session lifecycle (create, reconnect, close)
+- Handles session lifecycle (create, close)
 - Coordinates keyboard shortcuts
 - Sends minimap updates to the minimap window
 
@@ -228,6 +216,7 @@ Individual terminal instance that:
 - Handles PTY I/O via Tauri events
 - Manages font sizing and search
 - Captures canvas for minimap via OffscreenAddon
+- Forwards horizontal scroll to parent container for lane navigation
 
 ### Layout System
 
@@ -313,15 +302,11 @@ Commands available from the frontend via `$lib/api/terminal.ts`:
 | `pty_resize` | Resize PTY dimensions |
 | `pty_kill` | Kill PTY session |
 | `pty_list_sessions` | List active sessions |
-| `pty_reconnect_session` | Reconnect to tmux session |
+| `pty_get_session` | Get session info |
 | `pty_save_layout` | Persist layout to database |
 | `pty_get_layout` | Load layout from database |
 | `pty_save_preferences` | Save terminal preferences |
 | `pty_get_preferences` | Load terminal preferences |
-| `pty_is_using_tmux` | Check tmux availability |
-| `pty_list_reconnectable` | List orphaned tmux sessions |
-| `pty_get_tmux_config` | Read tmux config content |
-| `pty_set_tmux_config` | Write tmux config content |
 
 ## Building for Production
 
@@ -346,18 +331,6 @@ strip = true        # Strip symbols
 ```
 
 ## Troubleshooting
-
-### tmux not detected
-
-If sessions don't persist across restarts:
-
-```bash
-# Check if tmux is installed
-which tmux
-
-# Install via Homebrew (macOS)
-brew install tmux
-```
 
 ### Font not rendering correctly
 
@@ -405,4 +378,3 @@ MIT
 - [SvelteKit](https://kit.svelte.dev/) - Frontend framework
 - [xterm.js](https://xtermjs.org/) - Terminal emulator
 - [portable-pty](https://docs.rs/portable-pty/) - PTY management
-- [tmux](https://github.com/tmux/tmux) - Session persistence

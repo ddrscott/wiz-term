@@ -117,13 +117,6 @@ pub fn run() {
             pty::pty_get_layout,
             pty::pty_save_preferences,
             pty::pty_get_preferences,
-            pty::pty_is_using_tmux,
-            pty::pty_list_reconnectable,
-            pty::pty_reconnect_session,
-            pty::pty_get_tmux_config,
-            pty::pty_set_tmux_config,
-            pty::pty_reset_tmux_config,
-            pty::pty_get_tmux_config_path,
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
