@@ -528,6 +528,10 @@
 							onUrlChange={(url) => handleWebviewUrlChange(webview.id, url)}
 							onTitleChange={(title) => handleWebviewTitleChange(webview.id, title)}
 							onFocus={handleFocus}
+							onWidthChange={(width) => {
+								const columnId = findRootColumnId(layout, webview.id);
+								if (columnId) handleColumnWidthChange(columnId, width);
+							}}
 						/>
 					</div>
 				{/each}

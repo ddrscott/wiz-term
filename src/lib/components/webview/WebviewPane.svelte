@@ -18,9 +18,21 @@
 		onTitleChange?: (title: string) => void;
 		onUrlChange?: (url: string) => void;
 		onFocus?: (nodeId: string) => void;
+		onWidthChange?: (width: number) => void;
 	}
 
-	let { nodeId, url, title, bounds, onClose, onTitleChange, onUrlChange, onFocus }: Props = $props();
+	let { nodeId, url, title, bounds, onClose, onTitleChange, onUrlChange, onFocus, onWidthChange }: Props = $props();
+
+	// Size presets for webview width
+	const SIZE_PRESETS = {
+		s: 320,
+		m: 640,
+		xl: 800
+	} as const;
+
+	function applyPreset(preset: keyof typeof SIZE_PRESETS) {
+		onWidthChange?.(SIZE_PRESETS[preset]);
+	}
 
 	let containerEl: HTMLDivElement;
 	let inputUrl = $state(url);
@@ -330,6 +342,11 @@
 		/>
 
 		<button class="action-btn" onclick={openInBrowser} title="Open in browser">↗</button>
+		<div class="size-presets">
+			<button class="size-btn" onclick={() => applyPreset('s')} title="Small (320px)">s</button>
+			<button class="size-btn" onclick={() => applyPreset('m')} title="Medium (640px)">m</button>
+			<button class="size-btn" onclick={() => applyPreset('xl')} title="Extra Large (800px)">xl</button>
+		</div>
 		<button class="close-btn" onclick={onClose} title="Close">×</button>
 	</div>
 
@@ -362,50 +379,44 @@
 		align-items: center;
 		flex-shrink: 0;
 		gap: 6px;
-		z-index: 10;
 	}
 
 	.nav-buttons {
 		display: flex;
-		gap: 2px;
+		gap: 1px;
 	}
 
 	.nav-btn {
-		width: 20px;
-		height: 20px;
-		padding: 0;
+		padding: 0 3px;
 		background: none;
 		border: none;
-		color: #64748b;
+		color: #4b5563;
 		cursor: pointer;
-		font-size: 14px;
+		font-size: 12px;
 		line-height: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
 		transition: color 0.15s;
 	}
 
 	.nav-btn:hover {
-		color: #e2e8f0;
+		color: #94a3b8;
 	}
 
 	.url-input {
 		flex: 1;
 		min-width: 0;
-		padding: 3px 8px;
-		background: #1a1a2e;
-		border: 1px solid #2d2d44;
-		border-radius: 3px;
+		padding: 0;
+		background: transparent;
+		border: none;
 		color: #94a3b8;
 		font-size: 11px;
-		font-family: ui-monospace, 'SF Mono', monospace;
+		font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 		outline: none;
-		transition: border-color 0.15s;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.url-input:focus {
-		border-color: #3b82f6;
 		color: #e2e8f0;
 	}
 
@@ -418,13 +429,39 @@
 		border: none;
 		color: #4b5563;
 		cursor: pointer;
-		font-size: 12px;
-		padding: 2px 4px;
+		font-size: 11px;
+		padding: 0 2px;
 		transition: color 0.15s;
 	}
 
 	.action-btn:hover {
 		color: #94a3b8;
+	}
+
+	.size-presets {
+		display: flex;
+		gap: 2px;
+	}
+
+	.size-btn {
+		background: none;
+		border: 1px solid transparent;
+		color: #4b5563;
+		cursor: pointer;
+		font-size: 9px;
+		font-weight: 500;
+		line-height: 1;
+		padding: 2px 4px;
+		border-radius: 2px;
+		transition: all 0.15s;
+		font-family: ui-monospace, 'SF Mono', monospace;
+		text-transform: uppercase;
+	}
+
+	.size-btn:hover {
+		color: #94a3b8;
+		border-color: #374151;
+		background: rgba(255, 255, 255, 0.05);
 	}
 
 	.close-btn {
@@ -434,8 +471,8 @@
 		cursor: pointer;
 		font-size: 14px;
 		line-height: 1;
-		padding: 2px 4px;
-		border-radius: 3px;
+		padding: 0 2px;
+		border-radius: 2px;
 		transition: all 0.15s;
 	}
 
