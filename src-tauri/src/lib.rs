@@ -117,6 +117,7 @@ pub fn run() {
             pty::pty_get_layout,
             pty::pty_save_preferences,
             pty::pty_get_preferences,
+            pty::save_temp_image,
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

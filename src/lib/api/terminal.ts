@@ -57,3 +57,14 @@ export async function savePreferences(preferences: TerminalPreferences): Promise
 export async function getPreferences(): Promise<TerminalPreferences> {
 	return invoke('pty_get_preferences');
 }
+
+/**
+ * Save image data to a temp file and return the path.
+ * Used for pasting/dropping images into the terminal for Claude Code.
+ * @param data - Base64 encoded image data or data URL (data:image/png;base64,...)
+ * @param filename - Optional original filename to preserve extension
+ * @returns The path to the saved temp file
+ */
+export async function saveImageToTemp(data: string, filename?: string): Promise<string> {
+	return invoke('save_temp_image', { data, filename });
+}

@@ -2,6 +2,8 @@ use super::session::{CreateSessionRequest, PtySessionInfo};
 use crate::storage::database::TerminalPreferences;
 use crate::AppState;
 use chrono::Utc;
+use std::io::Write;
+use base64::{engine::general_purpose::STANDARD, Engine};
 
 #[tauri::command]
 pub async fn pty_create_session(
@@ -146,4 +148,63 @@ pub async fn pty_get_preferences(
         .db
         .get_terminal_preferences()
         .map_err(|e| format!("Failed to get preferences: {}", e))
+}
+
+/// Save image data to a temp file and return the path.
+/// Used for pasting/dropping images into the terminal for Claude Code.
+#[tauri::command]
+pub async fn save_temp_image(
+    data: String, // base64 encoded image data
+    filename: Option<String>,
+) -> Result<String, String> {
+    // Determine file extension from data URL or filename
+    let (extension, image_data) = if data.starts_with("data:image/") {
+        // Parse data URL: data:image/png;base64,<data>
+        let parts: Vec<&str> = data.splitn(2, ',').collect();
+        if parts.len() != 2 {
+            return Err("Invalid data URL format".to_string());
+        }
+
+        let mime_ext = if parts[0].contains("png") {
+            "png"
+        } else if parts[0].contains("jpeg") || parts[0].contains("jpg") {
+            "jpg"
+        } else if parts[0].contains("gif") {
+            "gif"
+        } else if parts[0].contains("webp") {
+            "webp"
+        } else {
+            "png" // default
+        };
+
+        (mime_ext.to_string(), parts[1].to_string())
+    } else {
+        // Raw base64 - guess from filename or default to png
+        let ext = filename
+            .as_ref()
+            .and_then(|f| f.rsplit('.').next())
+            .unwrap_or("png")
+            .to_string();
+        (ext, data)
+    };
+
+    // Decode base64
+    let bytes = STANDARD
+        .decode(&image_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Create temp file with original filename or generated name
+    let temp_dir = std::env::temp_dir();
+    let file_name = filename.unwrap_or_else(|| {
+        format!("wizterm-image-{}.{}", uuid::Uuid::new_v4(), extension)
+    });
+    let file_path = temp_dir.join(&file_name);
+
+    // Write to file
+    let mut file = std::fs::File::create(&file_path)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    file.write_all(&bytes)
+        .map_err(|e| format!("Failed to write image data: {}", e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
 }

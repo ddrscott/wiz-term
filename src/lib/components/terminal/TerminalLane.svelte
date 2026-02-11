@@ -13,7 +13,8 @@
 		resizeSession,
 		killSession,
 		onTerminalOutput,
-		onTerminalExit
+		onTerminalExit,
+		saveImageToTemp
 	} from '$lib/api/terminal';
 	import type { TerminalSession } from '$lib/types/terminal';
 	import { settings } from '$lib/stores/settings';
@@ -62,6 +63,9 @@
 	let showSearch = $state(false);
 	let searchQuery = $state('');
 	let searchInputEl: HTMLInputElement;
+
+	// Drag and drop visual feedback
+	let isDragOver = $state(false);
 
 	// Offscreen capture addon (for minimap when terminal is off-screen)
 	let offscreenAddon: OffscreenAddon | null = null;
@@ -481,6 +485,83 @@
 		}
 		// Vertical scroll passes through to xterm naturally
 	}
+
+	// Handle paste events - check for images in clipboard
+	async function handlePaste(e: ClipboardEvent) {
+		const items = e.clipboardData?.items;
+		if (!items) return;
+
+		for (const item of items) {
+			if (item.type.startsWith('image/')) {
+				e.preventDefault();
+				const file = item.getAsFile();
+				if (file) {
+					await injectImageAsPath(file);
+				}
+				return;
+			}
+		}
+		// Non-image paste handled by xterm naturally
+	}
+
+	// Handle drop events - check for image files
+	async function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		isDragOver = false;
+
+		const files = e.dataTransfer?.files;
+		if (!files || files.length === 0) return;
+
+		for (const file of files) {
+			if (file.type.startsWith('image/')) {
+				await injectImageAsPath(file);
+				return;
+			}
+		}
+	}
+
+	function handleDragOver(e: DragEvent) {
+		// Accept image drops
+		if (e.dataTransfer?.types.includes('Files')) {
+			e.preventDefault();
+			e.stopPropagation();
+			isDragOver = true;
+			if (e.dataTransfer) {
+				e.dataTransfer.dropEffect = 'copy';
+			}
+		}
+	}
+
+	function handleDragLeave(e: DragEvent) {
+		e.preventDefault();
+		isDragOver = false;
+	}
+
+	// Convert image file to base64 data URL and inject path into PTY
+	async function injectImageAsPath(file: File) {
+		if (isExited) return;
+
+		try {
+			// Read file as base64 data URL
+			const dataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result as string);
+				reader.onerror = () => reject(new Error('Failed to read image file'));
+				reader.readAsDataURL(file);
+			});
+
+			// Save to temp file via Tauri backend
+			const tempPath = await saveImageToTemp(dataUrl, file.name);
+
+			// Inject the file path into the terminal
+			// This is what Claude Code expects - a file path it can read
+			const encoder = new TextEncoder();
+			await writeToSession(session.id, encoder.encode(tempPath));
+		} catch (err) {
+			console.error('Failed to process image:', err);
+		}
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -526,11 +607,18 @@
 		</div>
 	{/if}
 
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="terminal-container"
+		class:drag-over={isDragOver}
 		bind:this={containerEl}
 		oncontextmenu={(e) => e.preventDefault()}
 		onwheel={handleWheel}
+		onpaste={handlePaste}
+		ondrop={handleDrop}
+		ondragover={handleDragOver}
+		ondragleave={handleDragLeave}
+		ondragenter={(e) => { e.preventDefault(); e.stopPropagation(); }}
 	></div>
 </div>
 
@@ -691,6 +779,12 @@
 		/* Font smoothing for clearer text on macOS */
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
+		/* Drag and drop visual feedback */
+		transition: box-shadow 0.15s ease;
+	}
+
+	.terminal-container.drag-over {
+		box-shadow: inset 0 0 0 2px #3b82f6;
 	}
 
 	.terminal-container :global(.xterm) {
