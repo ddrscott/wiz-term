@@ -16,10 +16,18 @@
 	// Dynamic import state - only load in browser after mount
 	let TerminalLanes: typeof import('$lib/components/terminal/TerminalLanes.svelte').default | null = $state(null);
 
+	// Tauri window API for manual drag
+	let startDragging: (() => Promise<void>) | null = null;
+
 	onMount(async () => {
 		// Dynamic import xterm.js components only in browser
 		const module = await import('$lib/components/terminal/TerminalLanes.svelte');
 		TerminalLanes = module.default;
+
+		// Import Tauri window API for manual drag
+		const { getCurrentWindow } = await import('@tauri-apps/api/window');
+		const currentWindow = getCurrentWindow();
+		startDragging = () => currentWindow.startDragging();
 
 		// Listen for native menu events
 		const { listen } = await import('@tauri-apps/api/event');
@@ -44,6 +52,13 @@
 		terminalActions.requestNewTerminal();
 	}
 
+	function handleHeaderMouseDown(e: MouseEvent) {
+		// Only drag on left click and if not clicking a button
+		if (e.button === 0 && startDragging && !(e.target as HTMLElement).closest('button')) {
+			startDragging();
+		}
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		// Cmd/Ctrl+N: New terminal
 		if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
@@ -65,18 +80,17 @@
 	{@render children()}
 {:else}
 	<div class="terminal-app">
-		<header class="terminal-header">
+		<header class="terminal-header" onmousedown={handleHeaderMouseDown}>
 			<div class="header-left">
 				<span class="prompt">$</span>
 				<span class="app-title">wiz-term</span>
-				<span class="cursor">_</span>
 			</div>
 			<div class="header-actions">
 				<button class="action-btn" onclick={handleNewTerminal} title="New terminal (Cmd+N)">
-					[+new]
+					+
 				</button>
 				<button class="action-btn" onclick={() => minimapStore.toggleWindow()} title="Toggle minimap (Cmd+Shift+M)">
-					[minimap]
+					⊞
 				</button>
 			</div>
 		</header>
@@ -105,16 +119,23 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 10px 16px;
+		/* Left padding for macOS traffic lights */
+		padding: 0 12px 0 78px;
+		height: 38px;
 		background: #0f0f1a;
 		border-bottom: 1px solid #1e1e2e;
 		flex-shrink: 0;
+		/* Prevent text selection, use default cursor for titlebar feel */
+		user-select: none;
+		-webkit-user-select: none;
+		cursor: default;
 	}
 
 	.header-left {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
+		font-size: 12px;
 	}
 
 	.prompt {
@@ -123,37 +144,37 @@
 	}
 
 	.app-title {
-		color: #e2e8f0;
-		font-weight: 600;
-	}
-
-	.cursor {
-		color: #22c55e;
-		animation: blink 1s step-end infinite;
-	}
-
-	@keyframes blink {
-		50% { opacity: 0; }
+		color: #64748b;
+		font-weight: 500;
 	}
 
 	.header-actions {
 		display: flex;
-		gap: 8px;
+		gap: 2px;
 	}
 
 	.action-btn {
-		padding: 4px 8px;
+		width: 28px;
+		height: 28px;
+		padding: 0;
 		background: none;
-		border: none;
+		border: 1px solid transparent;
+		border-radius: 4px;
 		color: #64748b;
 		cursor: pointer;
 		font-family: inherit;
-		font-size: inherit;
-		transition: color 0.15s;
+		font-size: 14px;
+		line-height: 1;
+		transition: all 0.15s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.action-btn:hover {
-		color: #22c55e;
+		color: #e2e8f0;
+		background: rgba(255, 255, 255, 0.1);
+		border-color: #2d2d44;
 	}
 
 	.terminal-main {
