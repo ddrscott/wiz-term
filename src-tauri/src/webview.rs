@@ -50,13 +50,20 @@ pub async fn create_webview(
     // Get the underlying window (not the webview window)
     let window_ref = window.as_ref().window();
 
-    // Create the child webview
+    // Get app data directory for persistent webview storage (cookies, cache, etc.)
+    let data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
+        .join("webview_data");
+
+    // Create the child webview with a standard browser user agent and persistent storage
     let webview = window_ref
         .add_child(
             tauri::webview::WebviewBuilder::new(
                 &id,
                 WebviewUrl::External(url.parse().map_err(|e| format!("Invalid URL: {}", e))?),
-            ),
+            )
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .data_directory(data_dir),
             LogicalPosition::new(x, y),
             LogicalSize::new(width, height),
         )
