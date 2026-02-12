@@ -831,6 +831,9 @@
 	.terminal-container {
 		flex: 1;
 		min-height: 0;
+		padding: 8px;
+		/* Ensure padding area matches terminal background */
+		background: var(--terminal-bg);
 		overflow: hidden;
 		overscroll-behavior: none;
 		/* Force GPU layer to keep WebGL rendering even when scrolled off-screen */

@@ -56,7 +56,9 @@
 		unlistenToggle?.();
 		unlistenPin?.();
 		unlistenReset?.();
-		window.removeEventListener('terminal-creation-failed', handleTerminalError as EventListener);
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('terminal-creation-failed', handleTerminalError as EventListener);
+		}
 	});
 
 	function handleTerminalError(e: CustomEvent<{ error: string }>) {
