@@ -209,6 +209,19 @@
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		fitAddon.fit();
 
+		// Sync container background to xterm's theme (handles base16-shell and OSC color changes)
+		let lastSyncedBg = '';
+		function syncBackground() {
+			if (terminal && containerEl) {
+				const bg = terminal.options.theme?.background;
+				if (bg && bg !== lastSyncedBg) {
+					containerEl.style.backgroundColor = bg;
+					lastSyncedBg = bg;
+				}
+			}
+		}
+		syncBackground();
+
 		// Register container for minimap AFTER terminal is fully rendered
 		terminalCanvases.register(nodeId, session.id, containerEl);
 
@@ -303,6 +316,8 @@
 				// Force refresh even when not visible (for minimap capture)
 				// WebGL canvas won't update if element is out of viewport otherwise
 				terminal.refresh(0, terminal.rows - 1);
+				// Sync background in case OSC color sequences changed it (e.g., base16-shell)
+				syncBackground();
 				// Mark dirty and schedule minimap update (event-driven, not polling)
 				terminalCanvases.markDirty(nodeId);
 				minimapStore.scheduleUpdate();
@@ -832,8 +847,7 @@
 		flex: 1;
 		min-height: 0;
 		padding: 8px;
-		/* Ensure padding area matches terminal background */
-		background: var(--terminal-bg);
+		/* Inherit background from parent (terminal-lane uses --terminal-bg) */
 		overflow: hidden;
 		overscroll-behavior: none;
 		/* Force GPU layer to keep WebGL rendering even when scrolled off-screen */
