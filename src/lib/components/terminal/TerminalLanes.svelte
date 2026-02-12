@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import { get } from 'svelte/store';
 	import {
 		createSession,
 		listSessions,
@@ -9,6 +10,7 @@
 		getLayout
 	} from '$lib/api/terminal';
 	import { terminalActions } from '$lib/stores/terminal';
+	import { settings } from '$lib/stores/settings';
 	import { terminalCanvases } from '$lib/stores/terminalCanvases';
 	import { minimapStore } from '$lib/stores/minimapStore';
 	import { terminalBounds } from '$lib/stores/terminalBounds';
@@ -199,6 +201,11 @@
 
 
 	onMount(async () => {
+		console.log('[TerminalLanes] onMount started');
+
+		// Load settings first to get shell_path
+		await settings.load();
+
 		// Register minimap callbacks
 		minimapStore.setCaptureCallback(captureSnapshots);
 		minimapStore.setFocusCallback(handleFocus);
@@ -207,12 +214,11 @@
 		// This handles frontend refresh while backend still has active sessions
 		let existingSessions: TerminalSession[] = [];
 		try {
+			console.log('[TerminalLanes] Calling listSessions...');
 			existingSessions = await listSessions();
-			if (existingSessions.length > 0) {
-				console.log(`Found ${existingSessions.length} existing PTY sessions`);
-			}
+			console.log(`[TerminalLanes] Found ${existingSessions.length} existing PTY sessions`);
 		} catch (e) {
-			console.error('Failed to load terminal sessions:', e);
+			console.error('[TerminalLanes] Failed to load terminal sessions:', e);
 		}
 
 		// Create sessions map
@@ -270,7 +276,9 @@
 
 		// If no layout (no sessions at all), create a new session
 		if (!layout.root) {
+			console.log('[TerminalLanes] No layout.root, creating new session...');
 			await handleNewSession();
+			console.log('[TerminalLanes] handleNewSession completed');
 		}
 
 		// Set initial focus
@@ -307,8 +315,17 @@
 	});
 
 	async function handleNewSession(targetNodeId?: string, zone?: DropZone) {
+		console.log('[TerminalLanes] handleNewSession called', { targetNodeId, zone });
 		try {
-			const session = await createSession();
+			// Get shell path from settings
+			const currentSettings = get(settings);
+			const shellPath = currentSettings.terminal.shell_path || '/bin/zsh';
+			console.log('[TerminalLanes] Calling createSession with shell:', shellPath);
+			const session = await createSession({
+				command: shellPath,
+				args: ['-l'] // Login shell for proper environment
+			});
+			console.log('[TerminalLanes] Session created:', session.id);
 			sessions.set(session.id, session);
 			sessions = new Map(sessions);
 
@@ -339,7 +356,11 @@
 			// Save immediately - don't risk losing session to HMR/crash
 			await saveLayoutNow();
 		} catch (e) {
-			console.error('Failed to create terminal session:', e);
+			console.error('[TerminalLanes] Failed to create terminal session:', e);
+			// Dispatch custom event so layout can show settings panel
+			window.dispatchEvent(new CustomEvent('terminal-creation-failed', {
+				detail: { error: e instanceof Error ? e.message : String(e) }
+			}));
 		}
 	}
 

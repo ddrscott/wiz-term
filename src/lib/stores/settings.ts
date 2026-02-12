@@ -13,7 +13,8 @@ const defaultSettings: Settings = {
 		scrollback: 10000,
 		cursor_blink: true,
 		minimap_refresh_ms: 200,
-		use_webgl: true
+		use_webgl: true,
+		shell_path: '/bin/zsh'
 	}
 };
 

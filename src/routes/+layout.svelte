@@ -18,6 +18,7 @@
 
 	// Settings panel state
 	let showSettings = $state(false);
+	let terminalError = $state<string | null>(null);
 
 	// Dynamic import state - only load in browser after mount
 	let TerminalLanes: typeof import('$lib/components/terminal/TerminalLanes.svelte').default | null = $state(null);
@@ -46,13 +47,22 @@
 		unlistenReset = await listen('menu-reset-minimap', () => {
 			minimapStore.resetPosition();
 		});
+
+		// Listen for terminal creation failures - show settings to configure shell
+		window.addEventListener('terminal-creation-failed', handleTerminalError as EventListener);
 	});
 
 	onDestroy(() => {
 		unlistenToggle?.();
 		unlistenPin?.();
 		unlistenReset?.();
+		window.removeEventListener('terminal-creation-failed', handleTerminalError as EventListener);
 	});
+
+	function handleTerminalError(e: CustomEvent<{ error: string }>) {
+		terminalError = e.detail.error;
+		showSettings = true;
+	}
 
 	function handleNewTerminal() {
 		terminalActions.requestNewTerminal();
@@ -129,7 +139,10 @@
 
 <!-- Settings panel -->
 {#if showSettings}
-	<SettingsPanel onClose={() => showSettings = false} />
+	<SettingsPanel
+		onClose={() => { showSettings = false; terminalError = null; }}
+		errorMessage={terminalError}
+	/>
 {/if}
 
 <style>

@@ -4,9 +4,10 @@
 
 	interface Props {
 		onClose: () => void;
+		errorMessage?: string | null;
 	}
 
-	let { onClose }: Props = $props();
+	let { onClose, errorMessage = null }: Props = $props();
 
 	// Local state bound to inputs
 	let fontFamily = $state($settings.terminal.font_family);
@@ -14,6 +15,7 @@
 	let useWebgl = $state($settings.terminal.use_webgl);
 	let cursorBlink = $state($settings.terminal.cursor_blink);
 	let scrollback = $state($settings.terminal.scrollback);
+	let shellPath = $state($settings.terminal.shell_path || '/bin/zsh');
 
 	// Custom font input (for fonts not in the list)
 	let customFont = $state('');
@@ -32,7 +34,8 @@
 			font_size: fontSize,
 			use_webgl: useWebgl,
 			cursor_blink: cursorBlink,
-			scrollback: scrollback
+			scrollback: scrollback,
+			shell_path: shellPath
 		});
 		onClose();
 	}
@@ -61,6 +64,32 @@
 		</header>
 
 		<div class="settings-content">
+			{#if errorMessage}
+				<div class="error-banner">
+					<strong>Terminal failed to start</strong>
+					<p>{errorMessage}</p>
+					<p class="error-hint">Try configuring a different shell path below.</p>
+				</div>
+			{/if}
+
+			<section class="settings-section">
+				<h3>Shell</h3>
+
+				<div class="setting-row">
+					<label for="shell-path">
+						<span>Shell Path</span>
+						<span class="setting-hint">Full path to shell executable</span>
+					</label>
+					<input
+						id="shell-path"
+						type="text"
+						bind:value={shellPath}
+						placeholder="/bin/zsh"
+						class="shell-input"
+					/>
+				</div>
+			</section>
+
 			<section class="settings-section">
 				<h3>Font</h3>
 
@@ -153,6 +182,33 @@
 </div>
 
 <style>
+	.error-banner {
+		background: rgba(239, 68, 68, 0.15);
+		border: 1px solid rgba(239, 68, 68, 0.4);
+		border-radius: 6px;
+		padding: 12px;
+		margin-bottom: 16px;
+	}
+
+	.error-banner strong {
+		display: block;
+		color: #ef4444;
+		font-size: 13px;
+		margin-bottom: 4px;
+	}
+
+	.error-banner p {
+		margin: 0;
+		font-size: 12px;
+		color: #fca5a5;
+		line-height: 1.4;
+	}
+
+	.error-banner .error-hint {
+		margin-top: 8px;
+		color: #94a3b8;
+	}
+
 	.settings-backdrop {
 		position: fixed;
 		inset: 0;
@@ -289,14 +345,19 @@
 		min-width: 140px;
 	}
 
-	.font-input {
+	.font-input,
+	.shell-input {
 		background: #1a1a2e;
 		border: 1px solid #2d2d44;
 		border-radius: 4px;
 		padding: 6px 10px;
 		color: #e2e8f0;
 		font-size: 13px;
-		font-family: inherit;
+		font-family: ui-monospace, monospace;
+	}
+
+	.shell-input {
+		width: 180px;
 	}
 
 	.text-btn {

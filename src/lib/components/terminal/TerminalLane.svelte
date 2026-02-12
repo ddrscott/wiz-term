@@ -831,7 +831,6 @@
 	.terminal-container {
 		flex: 1;
 		min-height: 0;
-		padding: 8px;
 		overflow: hidden;
 		overscroll-behavior: none;
 		/* Force GPU layer to keep WebGL rendering even when scrolled off-screen */

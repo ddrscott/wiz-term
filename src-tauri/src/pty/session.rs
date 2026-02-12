@@ -81,11 +81,33 @@ impl PtySessionManager {
         let cols = request.cols.unwrap_or(80);
         let rows = request.rows.unwrap_or(24);
 
-        // Default to user's shell from SHELL env var, fallback to /bin/sh
+        // Determine if using default shell (no explicit command)
+        let using_default_shell = request.command.is_none();
+
+        // Default to user's shell from SHELL env var, fallback to /bin/zsh (macOS default)
         let command = request.command.unwrap_or_else(|| {
-            std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+            std::env::var("SHELL").unwrap_or_else(|_| {
+                // On macOS, zsh is the default shell since Catalina
+                // Try zsh first, then bash, then sh
+                if std::path::Path::new("/bin/zsh").exists() {
+                    "/bin/zsh".to_string()
+                } else if std::path::Path::new("/bin/bash").exists() {
+                    "/bin/bash".to_string()
+                } else {
+                    "/bin/sh".to_string()
+                }
+            })
         });
-        let args = request.args.unwrap_or_default();
+
+        // Use login shell (-l) for default shell to ensure proper environment loading
+        // This is critical when app is launched from Finder (no inherited shell env)
+        let args = request.args.unwrap_or_else(|| {
+            if using_default_shell {
+                vec!["-l".to_string()]
+            } else {
+                vec![]
+            }
+        });
 
         info!("Spawning PTY session: {} {} {:?}", id, command, args);
 

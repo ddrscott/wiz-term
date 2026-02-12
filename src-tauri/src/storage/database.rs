@@ -62,6 +62,7 @@ impl Database {
                 cursor_blink INTEGER NOT NULL DEFAULT 1,
                 minimap_refresh_ms INTEGER NOT NULL DEFAULT 200,
                 use_webgl INTEGER NOT NULL DEFAULT 1,
+                shell_path TEXT NOT NULL DEFAULT '/bin/zsh',
                 updated_at INTEGER NOT NULL
             );
         "#,
@@ -70,6 +71,12 @@ impl Database {
         // Migration: Add use_webgl column if missing (for existing databases)
         let _ = conn.execute(
             "ALTER TABLE terminal_preferences ADD COLUMN use_webgl INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+
+        // Migration: Add shell_path column if missing
+        let _ = conn.execute(
+            "ALTER TABLE terminal_preferences ADD COLUMN shell_path TEXT NOT NULL DEFAULT '/bin/zsh'",
             [],
         );
 
@@ -211,10 +218,10 @@ impl Database {
         let now = Utc::now().timestamp();
         conn.execute(
             r#"
-            INSERT OR REPLACE INTO terminal_preferences (id, font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, use_webgl, updated_at)
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            INSERT OR REPLACE INTO terminal_preferences (id, font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, use_webgl, shell_path, updated_at)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
             "#,
-            params![prefs.font_size, prefs.font_family, prefs.scrollback, prefs.cursor_blink as i32, prefs.minimap_refresh_ms, prefs.use_webgl as i32, now],
+            params![prefs.font_size, prefs.font_family, prefs.scrollback, prefs.cursor_blink as i32, prefs.minimap_refresh_ms, prefs.use_webgl as i32, prefs.shell_path, now],
         )?;
         Ok(())
     }
@@ -223,7 +230,7 @@ impl Database {
     pub fn get_terminal_preferences(&self) -> SqliteResult<TerminalPreferences> {
         let conn = self.conn.lock().unwrap();
         let result = conn.query_row(
-            "SELECT font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, use_webgl FROM terminal_preferences WHERE id = 1",
+            "SELECT font_size, font_family, scrollback, cursor_blink, minimap_refresh_ms, use_webgl, shell_path FROM terminal_preferences WHERE id = 1",
             [],
             |row| {
                 Ok(TerminalPreferences {
@@ -232,7 +239,8 @@ impl Database {
                     scrollback: row.get(2)?,
                     cursor_blink: row.get::<_, i32>(3)? != 0,
                     minimap_refresh_ms: row.get(4)?,
-                    use_webgl: row.get::<_, i32>(5).unwrap_or(1) != 0, // Default true if column missing
+                    use_webgl: row.get::<_, i32>(5).unwrap_or(1) != 0,
+                    shell_path: row.get::<_, String>(6).unwrap_or_else(|_| "/bin/zsh".to_string()),
                 })
             },
         );
@@ -251,6 +259,7 @@ pub struct TerminalPreferences {
     pub cursor_blink: bool,
     pub minimap_refresh_ms: i32,
     pub use_webgl: bool,
+    pub shell_path: String,
 }
 
 impl Default for TerminalPreferences {
@@ -261,7 +270,8 @@ impl Default for TerminalPreferences {
             scrollback: 10000,
             cursor_blink: true,
             minimap_refresh_ms: 200,
-            use_webgl: true, // WebGL faster, but canvas may look sharper on Retina
+            use_webgl: true,
+            shell_path: "/bin/zsh".to_string(),
         }
     }
 }

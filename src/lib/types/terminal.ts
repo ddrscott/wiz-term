@@ -73,6 +73,7 @@ export interface TerminalPreferences {
 	cursor_blink: boolean;
 	minimap_refresh_ms: number;
 	use_webgl: boolean; // false = canvas renderer (may look sharper on some displays)
+	shell_path: string; // Path to shell executable
 }
 
 export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
@@ -81,7 +82,8 @@ export const DEFAULT_TERMINAL_PREFERENCES: TerminalPreferences = {
 	scrollback: 10000,
 	cursor_blink: true,
 	minimap_refresh_ms: 200,
-	use_webgl: true // WebGL is faster but canvas may look sharper
+	use_webgl: true, // WebGL is faster but canvas may look sharper
+	shell_path: '/bin/zsh' // Default shell on macOS
 };
 
 // Common monospace fonts for terminal
